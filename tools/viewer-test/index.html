@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Altrobe geoset test</title>
+<title>Altrobe look test</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   :root { color-scheme: dark; --bg: #1b1d22; --panel: #24272e; --text: #e6e6e6; --muted: #9aa0aa; }
@@ -31,9 +31,16 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-// Serve the worktree root so ../../output/ resolves. ?model=<fdid>&texture=<fdid> override the defaults.
+import { compositeLook, toImageData } from './compositor.js';
+
+// Serve the worktree root so ../../output/ resolves.
+//   ?look=orc-male | undead-female   data-driven geosets + composited textures (output/looks/<name>.json)
+//   ?model=<fdid>&texture=<fdid>&show=0,401,...   Step 3 mode: one texture on every mesh
+//   ?scale=0.5   composite at half the layout size (look mode)
 const params = new URLSearchParams(location.search);
-const fdid = params.get('model') ?? '917116';
+const lookName = params.get('look');
+const look = lookName ? await (await fetch(`../../output/looks/${lookName}.json`)).json() : null;
+const fdid = look ? String(look.modelFileDataId) : params.get('model') ?? '917116';
 const textureFdid = params.get('texture');
 
 // Geoset group names from https://wowdev.wiki/M2/.skin (geoset = group * 100 + variant).
@@ -41,12 +48,10 @@ const GROUPS = { 0: 'hair', 1: 'facial 1', 2: 'facial 2', 3: 'facial 3', 4: 'glo
   8: 'sleeves', 9: 'legcuffs', 10: 'chest', 11: 'pants', 12: 'tabard', 13: 'trousers/robe', 15: 'cape',
   16: 'facial jewelry', 17: 'eye glow', 18: 'belt', 19: 'tail/bones', 20: 'feet', 22: 'torso', 32: 'face', 33: 'eyes' };
 
-// Default "naked" set, chosen by eye for the Orc male body (917116): base 0, bare hands 401, bare feet 501,
-// ears 702, legs 1301, waist 1801, feet 2001, torso 2201, face 3202, eyes 3301. The real client picks
-// these from ChrCustomization choices and item geoset groups; this list is a stand-in for the spike.
-// ?show=0,401,... overrides it.
+// Step 3 fallback set, chosen by eye for the Orc male body (917116). Look mode uses look.geosets,
+// which tools/looks/looks.ts derives from ChrCustomization data. ?show=0,401,... overrides both.
 const DEFAULTS = [0, 401, 501, 702, 1301, 1801, 2001, 2201, 3202, 3301];
-const show = params.get('show')?.split(',').map(Number) ?? DEFAULTS;
+const show = params.get('show')?.split(',').map(Number) ?? look?.geosets ?? DEFAULTS;
 const isDefault = id => show.includes(id);
 
 const view = document.getElementById('view');
@@ -71,7 +76,8 @@ function resize() {
 addEventListener('resize', resize);
 resize();
 
-let material = new THREE.MeshStandardMaterial({ color: 0x8a9a6a, roughness: 0.8 });
+const grey = new THREE.MeshStandardMaterial({ color: 0x8a9a6a, roughness: 0.8 });
+let material = grey;
 if (textureFdid) {
   const tex = await new THREE.TextureLoader().loadAsync(`../../output/textures/${textureFdid}.png`);
   tex.flipY = false; // glTF/WoW UV origin is top-left
@@ -79,16 +85,75 @@ if (textureFdid) {
   material = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8 });
 }
 
+// Look mode: composite every character texture type (1 skin, 6 hair, 19 eyes) in the browser.
+// M2 texture types with no composited texture: type 0 loads its hardcoded FileDataID, anything
+// else stays grey and is listed in window.lookStats.uncovered.
+const typeMaterials = new Map();
+const hardcoded = new Map();
+if (look) {
+  const scale = Number(params.get('scale') ?? 1);
+  const t0 = performance.now();
+  const { textures, stats } = await compositeLook(look, id => `../../output/textures/${id}.png`, { scale });
+  for (const [type, t] of textures) {
+    const tex = new THREE.DataTexture(t.pixels, t.width, t.height, THREE.RGBAFormat);
+    tex.flipY = false;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.magFilter = THREE.LinearFilter;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.generateMipmaps = true;
+    tex.needsUpdate = true;
+    // Skin (1) draws opaque. Hair (6) and eyes (19) use their alpha as a cutout. The real blend
+    // mode lives in the M2 material table, which the Step 3 converter does not export yet.
+    const opts = type === 1 ? {} : { alphaTest: 0.5, side: THREE.DoubleSide };
+    typeMaterials.set(type, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85, ...opts }));
+  }
+  window.lookStats = { ...stats, totalMs: +(performance.now() - t0).toFixed(2), composited: textures.size, uncovered: [] };
+  window.lookTextures = textures;
+  window.lookImage = type => {
+    const t = textures.get(type);
+    const c = document.createElement('canvas');
+    c.width = t.width; c.height = t.height;
+    c.getContext('2d').putImageData(toImageData(t), 0, 0);
+    return c.toDataURL('image/png');
+  };
+}
+
+const meta = look ? await (await fetch(`../../output/models/${fdid}.json`)).json() : null;
+async function lookMaterial(submeshIndex) {
+  const unit = meta.geosets.find(g => g.submeshIndex === submeshIndex)?.textureUnits?.[0];
+  const first = unit?.textures?.[0];
+  if (!first) return grey;
+  if (first.type === 0 && first.fileDataId) {
+    if (!hardcoded.has(first.fileDataId)) {
+      hardcoded.set(first.fileDataId, new THREE.TextureLoader().loadAsync(`../../output/textures/${first.fileDataId}.png`).then(tex => {
+        tex.flipY = false;
+        tex.colorSpace = THREE.SRGBColorSpace;
+        // Shader 144 on these units is the eye-glow effect; draw it additively.
+        const additive = unit.shaderId === 144;
+        return new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85, transparent: additive, alphaTest: additive ? 0 : 0.5,
+          blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending, depthWrite: !additive, side: THREE.DoubleSide });
+      }, () => grey));
+    }
+    return hardcoded.get(first.fileDataId);
+  }
+  if (typeMaterials.has(first.type)) return typeMaterials.get(first.type);
+  const geosetId = meta.geosets.find(g => g.submeshIndex === submeshIndex)?.geosetId;
+  if (isDefault(geosetId)) window.lookStats.uncovered.push({ submeshIndex, geosetId, textureType: first.type });
+  return grey;
+}
+
 const gltf = await new GLTFLoader().loadAsync(`../../output/models/${fdid}.glb`);
 const meshesById = new Map();
-gltf.scene.traverse(o => {
-  if (!o.isMesh) return;
-  const id = o.parent?.userData?.geosetId ?? o.userData?.geosetId;
-  o.material = material;
+const meshes = [];
+gltf.scene.traverse(o => { if (o.isMesh) meshes.push(o); });
+for (const o of meshes) {
+  const data = { ...o.parent?.userData, ...o.userData };
+  const id = data.geosetId;
+  o.material = look ? await lookMaterial(data.submeshIndex) : material;
   if (!meshesById.has(id)) meshesById.set(id, []);
   meshesById.get(id).push(o);
   o.visible = isDefault(id);
-});
+}
 scene.add(gltf.scene);
 
 // Frame the visible default geosets.
@@ -98,6 +163,12 @@ const size = box.getSize(new THREE.Vector3()), center = box.getCenter(new THREE.
 controls.target.copy(center);
 // WoW models face +X, which stays +X after the Y-up conversion, so look from +X.
 camera.position.set(center.x + size.y * 2.2, center.y, center.z);
+// ?view=head frames the top of the model for face close-ups.
+if (params.get('view') === 'head') {
+  const head = new THREE.Vector3(center.x, box.max.y - size.y * 0.12, center.z);
+  controls.target.copy(head);
+  camera.position.set(head.x + size.y * 0.75, head.y, head.z);
+}
 controls.update();
 
 const toggles = document.getElementById('toggles');
@@ -120,7 +191,7 @@ for (const id of ids) {
   label.append(cb, ` ${id}`);
   toggles.appendChild(label);
 }
-document.getElementById('status').textContent = `model ${fdid}: ${ids.length} geosets, ${ids.filter(isDefault).length} shown`;
+document.getElementById('status').textContent = `${look ? `look ${lookName}, ` : ''}model ${fdid}: ${ids.length} geosets, ${ids.filter(isDefault).length} shown`;
 
 renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
 window.viewerReady = true;
