@@ -1,6 +1,7 @@
 # Extracted Blizzard content. Never commit game data, models, or textures.
 /extracted/
 /output/
+DBDCache/
 *.blp
 *.m2
 *.skin
