@@ -58,6 +58,18 @@ build.Load();
 var buildName = build.BuildConfig!.Values["build-name"][0];
 Console.WriteLine($"Product: {entry.Product}  Version: {entry.Version}  Build: {buildName}");
 
+// tags mode: list the install manifest's tags and how many files each covers.
+if (mode == "tags")
+{
+    foreach (var tag in build.Install!.Tags.OrderBy(t => t.type).ThenBy(t => t.name))
+    {
+        var count = 0;
+        for (var i = 0; i < tag.files.Length; i++) if (tag.files[i]) count++;
+        Console.WriteLine($"type {tag.type,3}  {tag.name,-24} {count} files");
+    }
+    return 0;
+}
+
 // where mode: show how far a FileDataID gets through root -> encoding -> local archives.
 if (mode == "where")
 {
