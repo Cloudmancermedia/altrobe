@@ -1,0 +1,23 @@
+# Extracted Blizzard content. Never commit game data, models, or textures.
+/extracted/
+/output/
+*.blp
+*.m2
+*.skin
+*.skel
+*.anim
+*.db2
+*.dbc
+*.casc
+
+# Dependencies and builds
+node_modules/
+dist/
+bin/
+obj/
+
+# Local tooling
+.claude/worktrees/
+.env
+.env.*
+.DS_Store
