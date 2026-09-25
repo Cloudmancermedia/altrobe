@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Altrobe geoset test</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { color-scheme: dark; --bg: #1b1d22; --panel: #24272e; --text: #e6e6e6; --muted: #9aa0aa; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 13px system-ui, sans-serif; }
+  #app { display: flex; height: 100%; }
+  #view { flex: 1; min-width: 0; }
+  #panel { width: 260px; overflow: auto; background: var(--panel); padding: 8px 12px; }
+  #panel h2 { font-size: 12px; margin: 10px 0 4px; color: var(--muted); font-weight: 600; }
+  label { display: inline-block; min-width: 72px; }
+  #status { color: var(--muted); }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="app">
+  <div id="view"></div>
+  <div id="panel"><div id="status">loading...</div><div id="toggles"></div></div>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// Serve the worktree root so ../../output/ resolves. ?model=<fdid>&texture=<fdid> override the defaults.
+const params = new URLSearchParams(location.search);
+const fdid = params.get('model') ?? '917116';
+const textureFdid = params.get('texture');
+
+// Geoset group names from https://wowdev.wiki/M2/.skin (geoset = group * 100 + variant).
+const GROUPS = { 0: 'hair', 1: 'facial 1', 2: 'facial 2', 3: 'facial 3', 4: 'gloves', 5: 'boots', 7: 'ears',
+  8: 'sleeves', 9: 'legcuffs', 10: 'chest', 11: 'pants', 12: 'tabard', 13: 'trousers/robe', 15: 'cape',
+  16: 'facial jewelry', 17: 'eye glow', 18: 'belt', 19: 'tail/bones', 20: 'feet', 22: 'torso', 32: 'face', 33: 'eyes' };
+
+// Default "naked" set, chosen by eye for the Orc male body (917116): base 0, bare hands 401, bare feet 501,
+// ears 702, legs 1301, waist 1801, feet 2001, torso 2201, face 3202, eyes 3301. The real client picks
+// these from ChrCustomization choices and item geoset groups; this list is a stand-in for the spike.
+// ?show=0,401,... overrides it.
+const DEFAULTS = [0, 401, 501, 702, 1301, 1801, 2001, 2201, 3202, 3301];
+const show = params.get('show')?.split(',').map(Number) ?? DEFAULTS;
+const isDefault = id => show.includes(id);
+
+const view = document.getElementById('view');
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(devicePixelRatio);
+view.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1b1d22);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x444450, 1.6));
+const sun = new THREE.DirectionalLight(0xffffff, 1.8);
+sun.position.set(2, 3, 4);
+scene.add(sun);
+const camera = new THREE.PerspectiveCamera(35, 1, 0.01, 100);
+const controls = new OrbitControls(camera, renderer.domElement);
+
+function resize() {
+  const w = view.clientWidth, h = view.clientHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize);
+resize();
+
+let material = new THREE.MeshStandardMaterial({ color: 0x8a9a6a, roughness: 0.8 });
+if (textureFdid) {
+  const tex = await new THREE.TextureLoader().loadAsync(`../../output/textures/${textureFdid}.png`);
+  tex.flipY = false; // glTF/WoW UV origin is top-left
+  tex.colorSpace = THREE.SRGBColorSpace;
+  material = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8 });
+}
+
+const gltf = await new GLTFLoader().loadAsync(`../../output/models/${fdid}.glb`);
+const meshesById = new Map();
+gltf.scene.traverse(o => {
+  if (!o.isMesh) return;
+  const id = o.parent?.userData?.geosetId ?? o.userData?.geosetId;
+  o.material = material;
+  if (!meshesById.has(id)) meshesById.set(id, []);
+  meshesById.get(id).push(o);
+  o.visible = isDefault(id);
+});
+scene.add(gltf.scene);
+
+// Frame the visible default geosets.
+const box = new THREE.Box3();
+for (const [id, list] of meshesById) if (isDefault(id)) list.forEach(m => box.expandByObject(m));
+const size = box.getSize(new THREE.Vector3()), center = box.getCenter(new THREE.Vector3());
+controls.target.copy(center);
+// WoW models face +X, which stays +X after the Y-up conversion, so look from +X.
+camera.position.set(center.x + size.y * 2.2, center.y, center.z);
+controls.update();
+
+const toggles = document.getElementById('toggles');
+const ids = [...meshesById.keys()].sort((a, b) => a - b);
+let lastGroup = -1;
+for (const id of ids) {
+  const group = Math.floor(id / 100);
+  if (group !== lastGroup) {
+    const h = document.createElement('h2');
+    h.textContent = `${group}xx ${GROUPS[group] ?? ''}`;
+    toggles.appendChild(h);
+    lastGroup = group;
+  }
+  const label = document.createElement('label');
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.checked = isDefault(id);
+  cb.dataset.geoset = id;
+  cb.onchange = () => meshesById.get(id).forEach(m => (m.visible = cb.checked));
+  label.append(cb, ` ${id}`);
+  toggles.appendChild(label);
+}
+document.getElementById('status').textContent = `model ${fdid}: ${ids.length} geosets, ${ids.filter(isDefault).length} shown`;
+
+renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+window.viewerReady = true;
+</script>
+</body>
+</html>

@@ -5,6 +5,9 @@
 //   dotnet run -- show <table>              print a table's columns and first rows
 //   dotnet run -- export <table> [table...] write tables to output/tables/<table>.json
 //   dotnet run -- check <fileDataId...>     confirm files exist and report their format
+//   dotnet run -- convert-model <fdid...>   M2 + first skin -> output/models/<fdid>.glb and .json
+//   dotnet run -- convert-texture <fdid...> BLP -> output/textures/<fdid>.png
+//   dotnet run -- convert-all [modelFdid...] everything in output/resolved/*/*.json, plus extra models
 //
 // Environment overrides: ALTROBE_INSTALL (default "/Applications/World of Warcraft"),
 // ALTROBE_PRODUCT (default wow_classic_beta), ALTROBE_TABLES_DIR (default "tables", under output/).
@@ -108,6 +111,20 @@ if (mode == "check")
         }
     }
     return bad > 0 ? 2 : 0;
+}
+
+// convert modes: turn local M2/BLP files into .glb/.json/.png under output/. See Convert/.
+if (mode is "convert-model" or "convert-texture" or "convert-all")
+{
+    Func<uint, byte[]> open = fdid => LocalFiles.Open(build, fdid).bytes;
+    var ids = args.Skip(1).Select(uint.Parse).ToList();
+    var failures = mode switch
+    {
+        "convert-model" => ids.Count(id => Altrobe.Convert.ConvertCommands.Model(open, outputDir, id) == null),
+        "convert-texture" => ids.Count(id => !Altrobe.Convert.ConvertCommands.Texture(open, outputDir, id)),
+        _ => Altrobe.Convert.ConvertCommands.All(open, outputDir, ids),
+    };
+    return failures > 0 ? 2 : 0;
 }
 
 var manifest = await LoadManifest(outputDir);
