@@ -37,6 +37,7 @@ import { compositeLook, toImageData } from './compositor.js';
 //   ?look=orc-male | undead-female   data-driven geosets + composited textures (output/looks/<name>.json)
 //   ?model=<fdid>&texture=<fdid>&show=0,401,...   Step 3 mode: one texture on every mesh
 //   ?scale=0.5   composite at half the layout size (look mode)
+//   ?pose=bind   show the bind pose instead of playing the Stand animation
 const params = new URLSearchParams(location.search);
 const lookName = params.get('look');
 const look = lookName ? await (await fetch(`../../output/looks/${lookName}.json`)).json() : null;
@@ -118,7 +119,7 @@ if (look) {
   };
 }
 
-const meta = look ? await (await fetch(`../../output/models/${fdid}.json`)).json() : null;
+const meta = await (await fetch(`../../output/models/${fdid}.json`)).json();
 async function lookMaterial(submeshIndex) {
   const unit = meta.geosets.find(g => g.submeshIndex === submeshIndex)?.textureUnits?.[0];
   const first = unit?.textures?.[0];
@@ -156,20 +157,13 @@ for (const o of meshes) {
 }
 scene.add(gltf.scene);
 
-// Frame the visible default geosets.
+// Frame the visible default geosets. Every primitive shares one vertex buffer, so this is the bind-pose
+// box of the whole model; it avoids Box3.expandByObject, which skins every vertex on the CPU.
 const box = new THREE.Box3();
-for (const [id, list] of meshesById) if (isDefault(id)) list.forEach(m => box.expandByObject(m));
-const size = box.getSize(new THREE.Vector3()), center = box.getCenter(new THREE.Vector3());
-controls.target.copy(center);
-// WoW models face +X, which stays +X after the Y-up conversion, so look from +X.
-camera.position.set(center.x + size.y * 2.2, center.y, center.z);
-// ?view=head frames the top of the model for face close-ups.
-if (params.get('view') === 'head') {
-  const head = new THREE.Vector3(center.x, box.max.y - size.y * 0.12, center.z);
-  controls.target.copy(head);
-  camera.position.set(head.x + size.y * 0.75, head.y, head.z);
-}
-controls.update();
+for (const [id, list] of meshesById) if (isDefault(id)) list.forEach(m => {
+  if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+  box.union(m.geometry.boundingBox);
+});
 
 const toggles = document.getElementById('toggles');
 const ids = [...meshesById.keys()].sort((a, b) => a - b);
@@ -193,7 +187,61 @@ for (const id of ids) {
 }
 document.getElementById('status').textContent = `${look ? `look ${lookName}, ` : ''}model ${fdid}: ${ids.length} geosets, ${ids.filter(isDefault).length} shown`;
 
-renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+// Stand animation (ID 0, first variation) on loop, unless ?pose=bind. The converter records the
+// sequence's real duration; glTF clips otherwise end at their last keyframe.
+const pose = params.get('pose');
+let mixer = null;
+const standMeta = meta.animations?.find(a => a.id === 0 && a.variation === 0 && a.name);
+const clip = standMeta && gltf.animations.find(c => c.name === standMeta.name);
+if (clip && pose !== 'bind') {
+  clip.duration = standMeta.durationMs / 1000;
+  mixer = new THREE.AnimationMixer(gltf.scene);
+  mixer.clipAction(clip).play();
+}
+// Camera. Pose the skeleton at t=0 first so ?view=head can aim at the animated head.
+if (mixer) mixer.update(0);
+gltf.scene.updateMatrixWorld(true);
+const size = box.getSize(new THREE.Vector3()), center = box.getCenter(new THREE.Vector3());
+controls.target.copy(center);
+// WoW models face +X, which stays +X after the Y-up conversion, so look from +X. ?view=side looks from +Z.
+camera.position.set(center.x + size.y * 2.2, center.y, center.z);
+if (params.get('view') === 'side') camera.position.set(center.x, center.y, center.z + size.y * 2.2);
+// ?view=head frames the face. Attachment 11 (helm) rides on the head bone, so it tracks the pose;
+// without it, fall back to the top of the bind-pose box.
+if (params.get('view') === 'head') {
+  const helm = gltf.scene.getObjectByName('attachment_11');
+  const head = helm ? helm.getWorldPosition(new THREE.Vector3())
+    : new THREE.Vector3(center.x, box.max.y - size.y * 0.12, center.z);
+  if (helm) head.y -= size.y * 0.06;
+  controls.target.copy(head);
+  camera.position.set(head.x + size.y * 0.75, head.y, head.z);
+}
+controls.update();
+
+document.getElementById('status').textContent += clip ? (mixer ? `, playing ${clip.name} (${clip.duration.toFixed(2)}s)` : ', bind pose') : ', no animation';
+
+// Test hooks: window.animation.pause()/setTime(t) make screenshots reproducible; frameStats counts frames.
+const clock = new THREE.Clock();
+let paused = false;
+window.animation = mixer && {
+  clip: clip.name, duration: clip.duration,
+  pause() { paused = true; },
+  setTime(t) { mixer.setTime(t); },
+  time: () => mixer.time,
+};
+window.frameStats = { frames: 0, mixerMs: 0, renderMs: 0 };
+renderer.setAnimationLoop(() => {
+  const dt = clock.getDelta();
+  const t0 = performance.now();
+  if (mixer && !paused) mixer.update(dt);
+  const t1 = performance.now();
+  controls.update();
+  renderer.render(scene, camera);
+  const t2 = performance.now();
+  window.frameStats.frames++;
+  window.frameStats.mixerMs += t1 - t0;
+  window.frameStats.renderMs += t2 - t1;
+});
 window.viewerReady = true;
 </script>
 </body>

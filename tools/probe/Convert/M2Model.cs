@@ -2,8 +2,8 @@
 // Source: src/js/3D/loaders/M2Loader.js and src/js/3D/Skin.js. Layouts checked against
 // https://wowdev.wiki/M2 and https://wowdev.wiki/M2/.skin.
 //
-// Reads only what the static converter needs: vertices, textures, texture combos, bones (pivots),
-// attachments, and the chunked-file FileDataID lists (SFID, TXID). No animation data.
+// Reads vertices (with bone weights and indices), textures, texture combos, bones with their animation
+// track headers, sequences, attachments, and the chunked-file FileDataID lists (SFID, TXID, SKID, AFID).
 
 using System.Buffers.Binary;
 using System.Numerics;
@@ -11,11 +11,10 @@ using System.Text;
 
 namespace Altrobe.Convert;
 
-sealed class M2Model
+sealed class M2Model : IM2Skeleton
 {
-    public record Vertex(Vector3 Position, Vector3 Normal, Vector2 Uv0);
+    public record Vertex(Vector3 Position, Vector3 Normal, Vector2 Uv0, uint BoneWeights, uint BoneIndices);
     public record Texture(uint Type, uint Flags, uint FileDataId);
-    public record Bone(int KeyBoneId, int ParentBone, Vector3 Pivot);
     public record Attachment(uint Id, ushort Bone, Vector3 Position);
 
     public uint Version;
@@ -25,17 +24,25 @@ sealed class M2Model
     public uint ViewCount;
     public Texture[] Textures = [];
     public ushort[] TextureCombos = [];
-    public Bone[] Bones = [];
+    public M2Bone[] Bones { get; private set; } = [];
+    public M2Sequence[] Sequences { get; private set; } = [];
+    public M2AnimFileId[] AnimFileIds { get; private set; } = [];
+    // wow.export M2Loader: .anim files are chunked when flag 0x200000 is set or the model has a .skel.
+    public bool ChunkedAnims => (Flags & 0x200000) != 0 || SkeletonFileDataId > 0;
+    public (byte[] data, int baseOfs) InFileData => (_data, _md20);
+    public List<string> Chunks = [];
+    byte[] _data = [];
+    int _md20;
     public Attachment[] Attachments = [];
     public short[] AttachmentLookup = [];
     public uint[] SkinFileDataIds = [];
     public uint SkeletonFileDataId;
 
-    const uint MD21 = 0x3132444D, MD20 = 0x3032444D, SFID = 0x44494653, TXID = 0x44495854, SKID = 0x44494B53;
+    const uint MD21 = 0x3132444D, MD20 = 0x3032444D, SFID = 0x44494653, TXID = 0x44495854, SKID = 0x44494B53, AFID = 0x44494641;
 
     public static M2Model Parse(byte[] data)
     {
-        var m = new M2Model();
+        var m = new M2Model { _data = data };
         var txid = Array.Empty<uint>();
         uint[]? sfid = null;
         var pos = 0;
@@ -47,12 +54,14 @@ sealed class M2Model
             var body = pos + 8;
             if (body + size > data.Length)
                 throw new InvalidDataException($"Chunk {FourCC(id)} at offset {pos} runs past end of file ({body + size} > {data.Length})");
+            m.Chunks.Add($"{FourCC(id)}({size})");
             switch (id)
             {
-                case MD21: m.ParseMd20(data.AsSpan(body, size)); sawMd21 = true; break;
+                case MD21: m.ParseMd20(data.AsSpan(body, size)); m._md20 = body; sawMd21 = true; break;
                 case SFID: sfid = ReadU32s(data, body, size / 4); break;
                 case TXID: txid = ReadU32s(data, body, size / 4); break;
                 case SKID: m.SkeletonFileDataId = U32(data, body); break;
+                case AFID: m.AnimFileIds = M2Bin.ReadAfid(data, body, size); break;
             }
             pos = body + size;
         }
@@ -73,14 +82,8 @@ sealed class M2Model
         if (nameCount > 0) Name = Encoding.ASCII.GetString(d.Slice((int)nameOfs, (int)nameCount)).TrimEnd('\0');
         Flags = U32(d, 16);
 
-        // Bones: 88 bytes each. Only pivots are used for now (static bind pose).
-        var (boneCount, boneOfs) = Arr(d, 44);
-        Bones = new Bone[boneCount];
-        for (var i = 0; i < boneCount; i++)
-        {
-            var o = (int)boneOfs + i * 88;
-            Bones[i] = new Bone(I32(d, o), BinaryPrimitives.ReadInt16LittleEndian(d[(o + 8)..]), V3(d, o + 76));
-        }
+        Sequences = M2Sequence.ReadArray(d, 28, 0);
+        Bones = M2Bone.ReadArray(d, 44, 0);
 
         // Vertices: 48 bytes each (pos, bone weights[4], bone indices[4], normal, uv0, uv1).
         var (vertCount, vertOfs) = Arr(d, 60);
@@ -88,7 +91,7 @@ sealed class M2Model
         for (var i = 0; i < vertCount; i++)
         {
             var o = (int)vertOfs + i * 48;
-            Vertices[i] = new Vertex(V3(d, o), V3(d, o + 20), new Vector2(F32(d, o + 32), F32(d, o + 36)));
+            Vertices[i] = new Vertex(V3(d, o), V3(d, o + 20), new Vector2(F32(d, o + 32), F32(d, o + 36)), U32(d, o + 12), U32(d, o + 16));
         }
 
         ViewCount = U32(d, 68);

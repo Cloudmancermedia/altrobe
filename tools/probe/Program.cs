@@ -5,7 +5,8 @@
 //   dotnet run -- show <table>              print a table's columns and first rows
 //   dotnet run -- export <table> [table...] write tables to output/tables/<table>.json
 //   dotnet run -- check <fileDataId...>     confirm files exist and report their format
-//   dotnet run -- convert-model <fdid...>   M2 + first skin -> output/models/<fdid>.glb and .json
+//   dotnet run -- convert-model <fdid...>   M2 + first skin -> skinned output/models/<fdid>.glb (with Stand) and .json
+//   dotnet run -- anim-info <m2Fdid> [skelFdid] where an M2's bones, sequences and .anim files live
 //   dotnet run -- convert-texture <fdid...> BLP -> output/textures/<fdid>.png
 //   dotnet run -- convert-all [modelFdid...] everything in output/resolved/*/*.json, plus extra models
 //
@@ -114,6 +115,12 @@ if (mode == "check")
 }
 
 // convert modes: turn local M2/BLP files into .glb/.json/.png under output/. See Convert/.
+if (mode == "anim-info")
+{
+    Altrobe.Convert.ConvertCommands.AnimInfo(fdid => LocalFiles.Open(build, fdid).bytes, uint.Parse(args[1]), args.Length > 2 ? uint.Parse(args[2]) : 0);
+    return 0;
+}
+
 if (mode is "convert-model" or "convert-texture" or "convert-all")
 {
     Func<uint, byte[]> open = fdid => LocalFiles.Open(build, fdid).bytes;
