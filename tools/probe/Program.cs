@@ -38,7 +38,7 @@ build.Settings.TryCDN = false;
 build.Settings.ListfileFallback = false;
 build.Settings.CacheDir = Path.Combine(outputDir, "tact-cache");
 // Full mode keeps every root entry per file. Normal mode keeps one, and for textures that have an
-// optional HD version it keeps the HD entry, which is only on disk if the HD pack is installed.
+// optional HD version it keeps only the HD entry, which is on disk only if the HD pack is installed.
 build.Settings.RootMode = RootInstance.LoadMode.Full;
 // TryCDN=false alone is not enough: when a file is missing locally, TACTSharp first queries
 // Blizzard's version service for a CDN list and pings the servers, and only then checks TryCDN.
@@ -236,13 +236,14 @@ class InstallDBCProvider(BuildInstance build, Dictionary<string, uint> manifest)
 
 static class LocalFiles
 {
-    // Opens a file from local storage. Tries standard entries before HD-texture and low-violence
-    // variants, and returns the first one whose data is actually on disk.
+    // Opens a file from local storage. Tries HD-texture entries first, then standard ones, with
+    // low-violence variants last, and returns the first one whose data is actually on disk. The HD
+    // texture pack is optional, so without it this falls through to the standard texture.
     public static (byte[] bytes, RootInstance.ContentFlags flags) Open(BuildInstance build, uint fdid)
     {
         const RootInstance.ContentFlags HighResTexture = RootInstance.ContentFlags.F00000001;
         var entries = build.Root!.GetEntriesByFDID(fdid)
-            .OrderBy(e => (e.contentFlags & HighResTexture) != 0)
+            .OrderByDescending(e => (e.contentFlags & HighResTexture) != 0)
             .ThenBy(e => (e.contentFlags & RootInstance.ContentFlags.LowViolence) != 0)
             .ToList();
         if (entries.Count == 0) throw new FileNotFoundException($"FileDataID {fdid} is not in root");
