@@ -41,6 +41,7 @@ sealed class M2Model : IM2Skeleton
     public short[] AttachmentLookup = [];
     public uint[] SkinFileDataIds = [];
     public uint SkeletonFileDataId;
+    public uint[] GlobalSequences = [];  // global loop durations in ms (MD20 header offset 20)
 
     const uint MD21 = 0x3132444D, MD20 = 0x3032444D, SFID = 0x44494653, TXID = 0x44495854, SKID = 0x44494B53, AFID = 0x44494641;
 
@@ -86,6 +87,9 @@ sealed class M2Model : IM2Skeleton
         if (nameCount > 0) Name = Encoding.ASCII.GetString(d.Slice((int)nameOfs, (int)nameCount)).TrimEnd('\0');
         Flags = U32(d, 16);
 
+        var (gsCount, gsOfs) = Arr(d, 20);
+        GlobalSequences = new uint[gsCount];
+        for (var i = 0; i < gsCount; i++) GlobalSequences[i] = U32(d, (int)gsOfs + i * 4);
         Sequences = M2Sequence.ReadArray(d, 28, 0);
         Bones = M2Bone.ReadArray(d, 44, 0);
 

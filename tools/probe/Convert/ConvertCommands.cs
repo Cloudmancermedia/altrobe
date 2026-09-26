@@ -71,6 +71,40 @@ static class ConvertCommands
         }
     }
 
+    // Diagnostic: parent chain, pivot and track headers of some bones, with keys for the first Stand.
+    public static void BoneInfo(Func<uint, byte[]> open, uint fdid, int[] bones)
+    {
+        var m2 = M2Model.Parse(open(fdid));
+        var seq = Array.FindIndex(m2.Sequences, q => q.Id == 0 && q.Variation == 0);
+        var src = M2AnimSource.Resolve(m2, seq, open);
+        Console.WriteLine($"m2 {fdid}: Stand is seq {seq}, data {src?.source}, {m2.GlobalSequences.Length} global sequences [{string.Join(",", m2.GlobalSequences)}]");
+        foreach (var i in bones)
+        {
+            var b = m2.Bones[i];
+            Console.WriteLine($"bone {i}: keyBone {b.KeyBoneId} flags 0x{b.Flags:X} parent {b.ParentBone} pivot {b.Pivot}");
+            foreach (var (name, t, size) in new[] { ("trans", b.Translation, 12), ("rot", b.Rotation, 8), ("scale", b.Scale, 12) })
+            {
+                var line = $"  {name}: interp {t.Interpolation} globalSeq {t.GlobalSeq} seqs {t.Times.Length}";
+                var ks = t.GlobalSeq >= 0 ? 0 : seq;
+                var data = t.GlobalSeq >= 0 ? (m2.InFileData.data, m2.InFileData.baseOfs) : src is { } s0 ? (s0.data, s0.baseOfs) : (null, 0);
+                if (data.Item1 != null && ks < t.Times.Length)
+                {
+                    if (name == "rot")
+                    {
+                        var k = t.Keys(ks, data.Item1, data.Item2, 8, M2Bone.ReadCompQuat);
+                        if (k != null) line += $" keys {k.Value.times.Length}: " + string.Join(" ", k.Value.times.Zip(k.Value.values).Take(3).Select(p => $"{p.First}:{p.Second}"));
+                    }
+                    else
+                    {
+                        var k = t.Keys(ks, data.Item1, data.Item2, 12, (d, at) => M2Bin.V3(d, at));
+                        if (k != null) line += $" keys {k.Value.times.Length}: " + string.Join(" ", k.Value.times.Zip(k.Value.values).Take(3).Select(p => $"{p.First}:{p.Second}"));
+                    }
+                }
+                Console.WriteLine(line);
+            }
+        }
+    }
+
     public static bool Texture(Func<uint, byte[]> open, string outputDir, uint fdid)
     {
         try

@@ -260,6 +260,18 @@ if (clip && pose !== 'bind') {
   mixer = new THREE.AnimationMixer(gltf.scene);
   mixer.clipAction(clip).play();
 }
+// Global sequences run on their own loop whatever else plays, bind pose included. Character models use
+// them for fixed per-race tweaks, e.g. the scale of the shoulder attachment bones (1.7 on the Orc male,
+// 0.65 on the Undead female), so without them shoulder items come out the same size on every race.
+const globalClips = (meta.animations ?? []).filter(a => a.globalSequence !== undefined && a.name)
+  .map(a => ({ a, c: gltf.animations.find(c => c.name === a.name) })).filter(x => x.c);
+if (globalClips.length) {
+  mixer ??= new THREE.AnimationMixer(gltf.scene);
+  for (const { a, c } of globalClips) {
+    c.duration = a.durationMs / 1000;
+    mixer.clipAction(c).play();
+  }
+}
 // Camera. Pose the skeleton at t=0 first so ?view=head can aim at the animated head.
 if (mixer) mixer.update(0);
 gltf.scene.updateMatrixWorld(true);
@@ -281,13 +293,14 @@ if (params.get('view') === 'head') {
 }
 controls.update();
 
-document.getElementById('status').textContent += clip ? (mixer ? `, playing ${clip.name} (${clip.duration.toFixed(2)}s)` : ', bind pose') : ', no animation';
+document.getElementById('status').textContent += (clip && pose !== 'bind' ? `, playing ${clip.name} (${clip.duration.toFixed(2)}s)` : clip ? ', bind pose' : ', no animation')
+  + (globalClips.length ? `, ${globalClips.length} global sequences` : '');
 
 // Test hooks: window.animation.pause()/setTime(t) make screenshots reproducible; frameStats counts frames.
 const clock = new THREE.Clock();
 let paused = false;
 window.animation = mixer && {
-  clip: clip.name, duration: clip.duration,
+  clip: clip?.name, duration: clip?.duration, globals: globalClips.map(g => g.c.name),
   pause() { paused = true; },
   setTime(t) { mixer.setTime(t); },
   time: () => mixer.time,
@@ -313,6 +326,7 @@ renderer.setAnimationLoop(() => {
   window.frameStats.mixerMs += t1 - t0;
   window.frameStats.renderMs += t2 - t1;
 });
+window.scene = scene; // for probes that read node transforms (e.g. attachment world scale)
 window.viewerReady = true;
 </script>
 </body>

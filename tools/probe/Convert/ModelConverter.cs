@@ -242,6 +242,15 @@ static class ModelConverter
             if (r.anim != null) animations.Add(r.anim);
             animMeta.Add(r.meta);
         }
+        // Global sequences loop on their own clock, whatever sequence is playing. Character models use
+        // them for constant per-race tweaks, such as the scale and tilt of the shoulder attachment bones
+        // (Orc male 1.7, Undead female 0.65), so each one becomes its own clip that plays alongside Stand.
+        for (var gs = 0; gs < m2.GlobalSequences.Length; gs++)
+        {
+            var r = ExportAnimation(m2, -1, open, AddView, AddAccessor, boneBase, gs);
+            if (r.anim != null) animations.Add(r.anim);
+            if (r.anim != null || r.meta["skippedSplineTracks"]!.GetValue<int>() > 0) animMeta.Add(r.meta);
+        }
 
         while (bin.Length % 4 != 0) bin.WriteByte(0);
         var gltf = new JsonObject
@@ -298,18 +307,36 @@ static class ModelConverter
 
     public static string BoneName(int i) => $"bone_{i}";
 
-    // One glTF animation for sequence `seq`. Tracks tied to a global sequence and spline (bezier/hermite)
-    // tracks are skipped, as in wow.export's glTF writer and bone renderer; the counts go in the metadata.
+    // One glTF animation for sequence `seq`, or, when `globalSeq` >= 0, for the tracks tied to that global
+    // sequence. A sequence clip skips global-sequence tracks (they go in their own clips). Spline
+    // (bezier/hermite) tracks are skipped, as in wow.export's glTF writer; the counts go in the metadata.
+    // Global-sequence tracks keep their keys at index 0 of the track and their data in the M2 itself
+    // (https://wowdev.wiki/M2#Global_sequences).
     static (JsonObject? anim, JsonObject meta) ExportAnimation(M2Model m2, int seq, Func<uint, byte[]> open,
-        Func<byte[], int?, int> addView, Func<int, int, int, string, JsonArray?, JsonArray?, int> addAccessor, int boneBase)
+        Func<byte[], int?, int> addView, Func<int, int, int, string, JsonArray?, JsonArray?, int> addAccessor, int boneBase,
+        int globalSeq = -1)
     {
         const int Float = 5126;
-        var q = m2.Sequences[seq];
-        var meta = new JsonObject { ["id"] = q.Id, ["variation"] = q.Variation, ["sequenceIndex"] = seq, ["durationMs"] = q.Duration, ["flags"] = q.Flags };
-        var src = M2AnimSource.Resolve(m2, seq, open);
-        if (src == null) { meta["error"] = "no track data (not in file, no AFID entry)"; return (null, meta); }
-        var (data, baseOfs, source) = src.Value;
-        meta["source"] = source;
+        var isGlobal = globalSeq >= 0;
+        var duration = isGlobal ? m2.GlobalSequences[globalSeq] : m2.Sequences[seq].Duration;
+        var keyIndex = isGlobal ? 0 : seq;
+        JsonObject meta;
+        byte[] data;
+        int baseOfs;
+        if (isGlobal)
+        {
+            meta = new JsonObject { ["globalSequence"] = globalSeq, ["durationMs"] = duration, ["source"] = "in-file" };
+            (data, baseOfs) = m2.InFileData;
+        }
+        else
+        {
+            var q0 = m2.Sequences[seq];
+            meta = new JsonObject { ["id"] = q0.Id, ["variation"] = q0.Variation, ["sequenceIndex"] = seq, ["durationMs"] = duration, ["flags"] = q0.Flags };
+            var src = M2AnimSource.Resolve(m2, seq, open);
+            if (src == null) { meta["error"] = "no track data (not in file, no AFID entry)"; return (null, meta); }
+            (data, baseOfs, var source) = src.Value;
+            meta["source"] = source;
+        }
 
         var samplers = new JsonArray();
         var channels = new JsonArray();
@@ -320,7 +347,7 @@ static class ModelConverter
         {
             // Match wow.export: wrap timestamps into [0, duration], keep an end-of-loop key, sort, and drop
             // repeated times (glTF sampler input must be strictly increasing).
-            var keys = times.Select((t, j) => (t: q.Duration > 0 ? (t % q.Duration == 0 && t > 0 ? q.Duration : t % q.Duration) : t, v: values[j]))
+            var keys = times.Select((t, j) => (t: duration > 0 ? (t % duration == 0 && t > 0 ? duration : t % duration) : t, v: values[j]))
                 .OrderBy(k => k.t).ToList();
             keys = keys.Where((k, j) => j == 0 || k.t != keys[j - 1].t).ToList();
             var input = keys.Select(k => k.t / 1000f).ToArray();
@@ -336,8 +363,10 @@ static class ModelConverter
 
         bool Usable(M2Track t)
         {
-            if (seq >= t.Times.Length || t.Times[seq].count == 0) return false;
-            if (t.GlobalSeq >= 0) { globalSkipped++; return false; }
+            // Check the global sequence first: a global track has one timeline (index 0), so testing
+            // `seq` against its length first hid these tracks from the count for any Stand not at index 0.
+            if (isGlobal ? t.GlobalSeq != globalSeq : t.GlobalSeq >= 0) { if (!isGlobal) globalSkipped++; return false; }
+            if (keyIndex >= t.Times.Length || t.Times[keyIndex].count == 0) return false;
             if (t.Interpolation >= 2) { splineSkipped++; return false; }
             return true;
         }
@@ -349,13 +378,13 @@ static class ModelConverter
             var pp = b.ParentBone >= 0 ? ToGltf(m2.Bones[b.ParentBone].Pivot) : Vector3.Zero;
             if (Usable(b.Translation))
             {
-                var k = b.Translation.Keys(seq, data, baseOfs, 12, (d, at) => M2Bin.V3(d, at));
+                var k = b.Translation.Keys(keyIndex, data, baseOfs, 12, (d, at) => M2Bin.V3(d, at));
                 if (k == null) emptyOrBad++;
                 else Channel(i, "translation", k.Value.times, k.Value.values.Select(v => { var g = ToGltf(v) + p - pp; return new[] { g.X, g.Y, g.Z }; }).ToArray());
             }
             if (Usable(b.Rotation))
             {
-                var k = b.Rotation.Keys(seq, data, baseOfs, 8, M2Bone.ReadCompQuat);
+                var k = b.Rotation.Keys(keyIndex, data, baseOfs, 8, M2Bone.ReadCompQuat);
                 if (k == null) emptyOrBad++;
                 else Channel(i, "rotation", k.Value.times, k.Value.values.Select(v =>
                 {
@@ -367,17 +396,25 @@ static class ModelConverter
             }
             if (Usable(b.Scale))
             {
-                var k = b.Scale.Keys(seq, data, baseOfs, 12, (d, at) => M2Bin.V3(d, at));
+                var k = b.Scale.Keys(keyIndex, data, baseOfs, 12, (d, at) => M2Bin.V3(d, at));
                 if (k == null) emptyOrBad++;
                 else Channel(i, "scale", k.Value.times, k.Value.values.Select(v => new[] { v.X, v.Z, v.Y }).ToArray());
             }
         }
 
         meta["channels"] = new JsonObject { ["translation"] = counts["translation"], ["rotation"] = counts["rotation"], ["scale"] = counts["scale"] };
-        meta["skippedGlobalSequenceTracks"] = globalSkipped;
+        if (!isGlobal) meta["skippedGlobalSequenceTracks"] = globalSkipped;
         meta["skippedSplineTracks"] = splineSkipped;
         meta["unreadableTracks"] = emptyOrBad;
         if (channels.Count == 0) { meta["error"] = "no channels"; return (null, meta); }
+        if (isGlobal)
+        {
+            var gname = $"Global_{globalSeq}";
+            meta["name"] = gname;
+            return (new JsonObject { ["name"] = gname, ["samplers"] = samplers, ["channels"] = channels,
+                ["extras"] = new JsonObject { ["globalSequence"] = globalSeq, ["durationMs"] = duration } }, meta);
+        }
+        var q = m2.Sequences[seq];
         var name = q.Id == 0 ? $"Stand_{q.Variation}" : $"anim_{q.Id}_{q.Variation}";
         meta["name"] = name;
         return (new JsonObject { ["name"] = name, ["samplers"] = samplers, ["channels"] = channels,
