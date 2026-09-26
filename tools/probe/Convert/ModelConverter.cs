@@ -287,6 +287,7 @@ static class ModelConverter
             ["bones"] = bonesMeta,
             ["coordinateSystem"] = "glTF Y-up: (x, y, z)_wow -> (x, z, -y)",
             ["textures"] = textures,
+            ["materials"] = new JsonArray(m2.Materials.Select((x, i) => (JsonNode)new JsonObject { ["index"] = i, ["flags"] = x.Flags, ["blendMode"] = x.BlendMode }).ToArray()),
             ["geosets"] = geosets,
             ["attachments"] = attachments,
         };
@@ -412,11 +413,14 @@ static class ModelConverter
                 var tx = m2.Textures[ti];
                 layers.Add(new JsonObject { ["textureIndex"] = ti, ["type"] = tx.Type, ["fileDataId"] = tx.Type == 0 ? tx.FileDataId : null });
             }
+            var mat = b.MaterialIndex < m2.Materials.Length ? m2.Materials[b.MaterialIndex] : null;
             list.Add(new JsonObject
             {
                 ["priority"] = b.Priority,
                 ["shaderId"] = b.ShaderId,
                 ["materialIndex"] = b.MaterialIndex,
+                ["blendMode"] = mat?.BlendMode,
+                ["materialFlags"] = mat?.Flags,
                 ["materialLayer"] = b.MaterialLayer,
                 ["textures"] = layers,
             });

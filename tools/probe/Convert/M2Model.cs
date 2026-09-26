@@ -2,7 +2,7 @@
 // Source: src/js/3D/loaders/M2Loader.js and src/js/3D/Skin.js. Layouts checked against
 // https://wowdev.wiki/M2 and https://wowdev.wiki/M2/.skin.
 //
-// Reads vertices (with bone weights and indices), textures, texture combos, bones with their animation
+// Reads vertices (with bone weights and indices), textures, materials, texture combos, bones with their animation
 // track headers, sequences, attachments, and the chunked-file FileDataID lists (SFID, TXID, SKID, AFID).
 
 using System.Buffers.Binary;
@@ -16,6 +16,9 @@ sealed class M2Model : IM2Skeleton
     public record Vertex(Vector3 Position, Vector3 Normal, Vector2 Uv0, uint BoneWeights, uint BoneIndices);
     public record Texture(uint Type, uint Flags, uint FileDataId);
     public record Attachment(uint Id, ushort Bone, Vector3 Position);
+    // M2Material: render flags (0x1 unlit, 0x2 unfogged, 0x4 two-sided, 0x8 no depth test, 0x10 no depth write)
+    // and blending mode (0 opaque, 1 alpha key, 2 alpha, 3 no-alpha add, 4 add, 5 mod, 6 mod2x, 7 blend add).
+    public record Material(ushort Flags, ushort BlendMode);
 
     public uint Version;
     public string Name = "";
@@ -24,6 +27,7 @@ sealed class M2Model : IM2Skeleton
     public uint ViewCount;
     public Texture[] Textures = [];
     public ushort[] TextureCombos = [];
+    public Material[] Materials = [];
     public M2Bone[] Bones { get; private set; } = [];
     public M2Sequence[] Sequences { get; private set; } = [];
     public M2AnimFileId[] AnimFileIds { get; private set; } = [];
@@ -103,6 +107,15 @@ sealed class M2Model : IM2Skeleton
         {
             var o = (int)texOfs + i * 16;
             Textures[i] = new Texture(U32(d, o), U32(d, o + 4), 0);
+        }
+
+        // Materials: 4 bytes each (flags u16, blending mode u16). https://wowdev.wiki/M2#Render_flags_and_blending_modes
+        var (matCount, matOfs) = Arr(d, 112);
+        Materials = new Material[matCount];
+        for (var i = 0; i < matCount; i++)
+        {
+            var o = (int)matOfs + i * 4;
+            Materials[i] = new Material(BinaryPrimitives.ReadUInt16LittleEndian(d[o..]), BinaryPrimitives.ReadUInt16LittleEndian(d[(o + 2)..]));
         }
 
         // Texture combos (a.k.a. texture lookup): maps a batch's textureComboIndex to a texture index.

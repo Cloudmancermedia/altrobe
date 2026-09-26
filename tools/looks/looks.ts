@@ -203,10 +203,26 @@ for (const ch of CHARACTERS) {
   layers.sort((a, b) => a.textureType - b.textureType || a.layer - b.layer);
   const textures = (materialsByLayout.get(layoutId) ?? []).map((m) => ({ textureType: m.TextureType, width: m.Width, height: m.Height }));
 
+  // 4. Where item textures go (used in the browser by tools/viewer-test/dress.js). Every section rectangle
+  // of the layout, and for item component sections 0-8 the texture layer that paints them. Ported from
+  // wow.export tab_characters.js update_textures: the first layer (in table order) whose section mask
+  // includes the section, else the full-size skin layer (mask -1, texture type 1). Items blend over the
+  // skin, so blit modes 0/1 become 15 (alpha), as in wow.export.
+  const layoutLayers = layersByLayout.get(layoutId) ?? [];
+  const baseLayer = layoutLayers.find((l) => l.TextureSectionTypeBitMask === -1 && l.TextureType === 1);
+  const sectionLayers: Row[] = [];
+  for (let sectionType = 0; sectionType < 9; sectionType++) {
+    const l = layoutLayers.find((l) => l.TextureSectionTypeBitMask !== -1 && (1 << sectionType) & l.TextureSectionTypeBitMask) ?? baseLayer;
+    if (!l) continue;
+    sectionLayers.push({ sectionType, textureType: l.TextureType, blendMode: l.BlendMode === 0 || l.BlendMode === 1 ? 15 : l.BlendMode, fromLayer: l.ID });
+  }
+  const allSections = sections.map((s) => ({ sectionType: s.SectionType, x: s.X, y: s.Y, width: s.Width, height: s.Height }));
+
   const look = {
     name: ch.name, race: ch.race, sex: ch.sex, classId: ch.classId, overrideArchive: OVERRIDE_ARCHIVE,
     chrModelId: model.ID, modelFileDataId: bodyFdid, textureLayoutId: layoutId, layout: layouts.get(layoutId),
-    choices: chosen, geosets, geosetsFromChoices: fromChoices, textures, layers, unsupportedElements: unsupported, notes,
+    choices: chosen, geosets, geosetsFromChoices: fromChoices, textures, layers,
+    sections: allSections, sectionLayers, unsupportedElements: unsupported, notes,
   };
   writeFileSync(join(root, `output/looks/${ch.name}.json`), JSON.stringify(look, null, 2));
   console.log(`${ch.name}: ChrModel ${model.ID}, layout ${layoutId}`);

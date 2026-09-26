@@ -112,11 +112,11 @@ function resolveItem(itemId: number, c: Character) {
     textures: pickComponentFiles((textureFilesByRes.get(m.MaterialResourcesID) ?? []).map((r) => r.FileDataID), componentTexture, c, "Texture"),
   }));
 
-  const helmHides = [0, 1].flatMap((i) => {
-    const vis = display.HelmetGeosetVis?.[i];
-    if (!vis) return [];
-    return (helmetGeosetsByVis.get(vis) ?? []).filter((h) => h.RaceID === c.raceId || h.RaceID === 0).map((h) => h.HideGeosetGroup);
-  });
+  // HelmetGeosetVis is indexed by sex (0 male, 1 female), as in wow.export DBItemGeosets.get_helmet_hide_geosets.
+  const helmVis = display.HelmetGeosetVis?.[c.sex];
+  const helmHides = helmVis
+    ? (helmetGeosetsByVis.get(helmVis) ?? []).filter((h) => h.RaceID === c.raceId || h.RaceID === 0).map((h) => h.HideGeosetGroup)
+    : [];
 
   return {
     itemId,
