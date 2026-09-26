@@ -26,6 +26,13 @@ export const INVENTORY_TYPE_TO_SLOT = {
   13: 16, 14: 17, 15: 16, 16: 15, 17: 16, 19: 19, 20: 5, 21: 16, 22: 17, 23: 17, 26: 16,
 };
 
+// Slot names used by saved looks (look.js), mapped to the equipment slot IDs above. The right
+// shoulder (30) has no name: it always holds the same item as "shoulder".
+export const SLOT_NAMES = {
+  head: 1, neck: 2, shoulder: SHOULDER_SLOT_L, shirt: 4, chest: 5, waist: 6, legs: 7, feet: 8,
+  wrist: 9, hands: 10, back: 15, mainhand: 16, offhand: 17, tabard: 19,
+};
+
 // M2 attachment IDs (EquipmentSlots.js ATTACHMENT_ID) per slot, in ItemDisplayInfo model order.
 export const ATTACHMENT = { HAND_RIGHT: 1, HAND_LEFT: 2, SHOULDER_RIGHT: 5, SHOULDER_LEFT: 6, HELMET: 11, BACK: 12, SHIELD: 0 };
 const SLOT_TO_ATTACHMENT = {

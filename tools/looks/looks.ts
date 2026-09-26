@@ -35,6 +35,9 @@ function table(name: string): Row[] {
   if (!cache.has(name)) cache.set(name, JSON.parse(readFileSync(join(tablesDir, `${name}.json`), "utf8")).rows);
   return cache.get(name)!;
 }
+// Game build of the exported tables (the probe records it on every table file). Looks carry it so a
+// saved look can say which build it was made on.
+const BUILD: string = JSON.parse(readFileSync(join(tablesDir, "ChrCustomization.json"), "utf8")).version;
 function groupBy(rows: Row[], key: string): Map<number, Row[]> {
   const m = new Map<number, Row[]>();
   for (const r of rows) {
@@ -230,7 +233,7 @@ for (const ch of CHARACTERS) for (const models of MODEL_SETS) {
   const allSections = sections.map((s) => ({ sectionType: s.SectionType, x: s.X, y: s.Y, width: s.Width, height: s.Height }));
 
   const look = {
-    name: outName, character: ch.name, models, race: ch.race, sex: ch.sex, classId: ch.classId, overrideArchive: OVERRIDE_ARCHIVE,
+    name: outName, character: ch.name, build: BUILD, models, race: ch.race, sex: ch.sex, classId: ch.classId, overrideArchive: OVERRIDE_ARCHIVE,
     chrModelId: model.ID, hdChrModelId: link.ChrModelID, modelFileDataId: bodyFdid, textureLayoutId: layoutId, layout: layouts.get(layoutId),
     choices: chosen, geosets, geosetsFromChoices: fromChoices, textures, layers,
     sections: allSections, sectionLayers, unsupportedElements: unsupported, notes,
