@@ -40,6 +40,8 @@ import { m2Material } from './m2-material.js';
 
 // Serve the worktree root so ../../output/ resolves.
 //   ?look=orc-male | undead-female   data-driven geosets + composited textures (output/looks/<name>.json)
+//   ?models=hd|sd   (look mode) HD body (default) or the SD (original-style) body, as the game's graphics
+//                   setting switches; SD looks are output/looks/<name>-sd.json. Items resolve the same.
 //   ?model=<fdid>&texture=<fdid>&show=0,401,...   Step 3 mode: one texture on every mesh
 //   ?scale=0.5   composite at half the layout size (look mode)
 //   ?view=head|side|back   camera presets (default: front)
@@ -48,7 +50,8 @@ import { m2Material } from './m2-material.js';
 //   ?glow=0   hide attached-model submeshes that use additive blending (weapon glow planes)
 const params = new URLSearchParams(location.search);
 const lookName = params.get('look');
-const baseLook = lookName ? await (await fetch(`../../output/looks/${lookName}.json`)).json() : null;
+const modelSet = params.get('models') === 'sd' ? 'sd' : 'hd';
+const baseLook = lookName ? await (await fetch(`../../output/looks/${lookName}${modelSet === 'sd' ? '-sd' : ''}.json`)).json() : null;
 
 // Dressing: the look state is { character, items: { slot: itemId } }. The per-item JSON was resolved
 // offline for this race and sex (tools/resolve); dress.js turns it into layers, geosets and attachments.
@@ -247,7 +250,7 @@ for (const id of ids) {
   label.append(cb, ` ${id}`);
   toggles.appendChild(label);
 }
-document.getElementById('status').textContent = `${look ? `look ${lookName}, ` : ''}model ${fdid}: ${ids.length} geosets, ${ids.filter(isDefault).length} shown`;
+document.getElementById('status').textContent = `${look ? `look ${lookName} (${modelSet}), ` : ''}model ${fdid}: ${ids.length} geosets, ${ids.filter(isDefault).length} shown`;
 
 // Stand animation (ID 0, first variation) on loop, unless ?pose=bind. The converter records the
 // sequence's real duration; glTF clips otherwise end at their last keyframe.

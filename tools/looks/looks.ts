@@ -2,7 +2,13 @@
 // geosets to show and the texture layers to composite. Reads the JSON tables the probe exported
 // into output/tables/. Run with Node 24+:
 //   node tools/looks/looks.ts
-// Writes output/looks/<name>.json and prints a summary.
+// Writes output/looks/<name>.json (HD body) and output/looks/<name>-sd.json (SD body), and prints a summary.
+//
+// HD and SD bodies: WoW: Forever offers both, switched in the client's graphics settings. The race
+// and sex map to the HD ChrModel through ChrRaceXChrModel; ChrModelAltVariant (a Forever-only table,
+// SourceChrModelID -> VariantChrModelID) maps each HD ChrModel to its SD variant, e.g. Orc male 3 -> 259
+// and Undead female 10 -> 266. The SD ChrModel has its own body model, texture layout and
+// customization options, so the same steps below run on either one.
 //
 // Portions ported from wow.export (https://github.com/Kruithne/wow.export), MIT License,
 // Copyright (c) Kruithne and Marlamin. Ported logic: default geoset reset rule and per-option
@@ -53,6 +59,8 @@ const CHARACTERS = [
 const OVERRIDE_ARCHIVE = 0;
 
 const raceXModel = table("ChrRaceXChrModel");
+const altVariant = new Map(table("ChrModelAltVariant").map((r) => [r.SourceChrModelID, r.VariantChrModelID]));
+const MODEL_SETS = ["hd", "sd"] as const;
 const chrModel = byId(table("ChrModel"));
 const optionsByModel = groupBy(table("ChrCustomizationOption"), "ChrModelID");
 const choicesByOption = groupBy(table("ChrCustomizationChoice"), "ChrCustomizationOptionID");
@@ -108,9 +116,12 @@ function geosetOf(id: number): number {
 
 mkdirSync(join(root, "output/looks"), { recursive: true });
 
-for (const ch of CHARACTERS) {
+for (const ch of CHARACTERS) for (const models of MODEL_SETS) {
   const link = raceXModel.find((r) => r.ChrRacesID === ch.race && r.Sex === ch.sex)!;
-  const model = chrModel.get(link.ChrModelID)!;
+  const variantId = models === "sd" ? altVariant.get(link.ChrModelID) : link.ChrModelID;
+  if (variantId === undefined) { console.log(`${ch.name}: no ChrModelAltVariant row for ChrModel ${link.ChrModelID}, no SD look`); continue; }
+  const model = chrModel.get(variantId)!;
+  const outName = models === "sd" ? `${ch.name}-sd` : ch.name;
   const layoutId = model.CharComponentTextureLayoutID;
   // Body model: ChrModel.DisplayID -> CreatureDisplayInfo.ModelID -> CreatureModelData.FileDataID.
   const bodyFdid: number = modelData.get(displayInfo.get(model.DisplayID)!.ModelID)!.FileDataID;
@@ -219,13 +230,13 @@ for (const ch of CHARACTERS) {
   const allSections = sections.map((s) => ({ sectionType: s.SectionType, x: s.X, y: s.Y, width: s.Width, height: s.Height }));
 
   const look = {
-    name: ch.name, race: ch.race, sex: ch.sex, classId: ch.classId, overrideArchive: OVERRIDE_ARCHIVE,
-    chrModelId: model.ID, modelFileDataId: bodyFdid, textureLayoutId: layoutId, layout: layouts.get(layoutId),
+    name: outName, character: ch.name, models, race: ch.race, sex: ch.sex, classId: ch.classId, overrideArchive: OVERRIDE_ARCHIVE,
+    chrModelId: model.ID, hdChrModelId: link.ChrModelID, modelFileDataId: bodyFdid, textureLayoutId: layoutId, layout: layouts.get(layoutId),
     choices: chosen, geosets, geosetsFromChoices: fromChoices, textures, layers,
     sections: allSections, sectionLayers, unsupportedElements: unsupported, notes,
   };
-  writeFileSync(join(root, `output/looks/${ch.name}.json`), JSON.stringify(look, null, 2));
-  console.log(`${ch.name}: ChrModel ${model.ID}, layout ${layoutId}`);
+  writeFileSync(join(root, `output/looks/${outName}.json`), JSON.stringify(look, null, 2));
+  console.log(`${outName}: ChrModel ${model.ID}, body ${bodyFdid}, layout ${layoutId}`);
   for (const c of chosen)
     console.log(`  option ${c.optionId} ${c.option} (flags 0x${c.optionFlags.toString(16)}): ${c.choiceId ?? "-"} ${c.choice} ${c.skipped ? `[${c.skipped}]` : ""}${c.wowExportChoiceId !== c.choiceId ? ` (wow.export: ${c.wowExportChoiceId})` : ""}`);
   console.log(`  geosets: ${geosets.join(",")}`);
