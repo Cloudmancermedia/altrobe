@@ -13,8 +13,18 @@ export default defineConfig(async ({ command }) => {
     const { spikeAdapter } = await import('./dev/spike-adapter.ts')
     plugins.push(spikeAdapter({ outputDir }))
   }
+  // Dev only: ALTROBE_API=http://127.0.0.1:5161 sends /api and /assets to a running local server.
+  // The server rejects cross-site Origin headers, and the dev page is a different origin, so the
+  // proxy drops the header; Host stays localhost, which the server accepts.
+  const api = command === 'serve' ? process.env.ALTROBE_API : undefined
+  const toServer = api && {
+    target: api,
+    configure: (proxy: { on: (e: 'proxyReq', f: (req: { removeHeader: (h: string) => void }) => void) => void }) =>
+      proxy.on('proxyReq', req => req.removeHeader('origin')),
+  }
   return {
     plugins,
+    server: toServer ? { proxy: { '/api': toServer, '/assets': toServer } } : undefined,
     build: {
       // The server serves converted game assets under /assets/{build}/, so the app's own bundle goes
       // elsewhere to keep the two apart.
