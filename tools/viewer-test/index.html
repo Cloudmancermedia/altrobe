@@ -295,6 +295,10 @@ if (dressed) {
       if (!glow && r.blendMode >= 3) o.visible = false;
     }
     itemGltf.scene.name = `item_${a.itemId}_${a.modelFileDataId}`;
+    // Item models with a skeleton (weapons) name their bones bone_<n> too. The body's mixer binds tracks
+    // by node name across the whole scene, so an unprefixed item bone can capture a body track and freeze
+    // that body bone. Prefix every node inside the item to keep names unique.
+    itemGltf.scene.traverse(o => { if (o !== itemGltf.scene) o.name = `${itemGltf.scene.name}/${o.name}`; });
     node.add(itemGltf.scene);
     attached.push({ ...a, node: node.name, bone: node.parent?.name, submeshes: list.length });
   }));
