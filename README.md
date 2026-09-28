@@ -17,6 +17,10 @@ If you run the importer, you are reading files from your own game install. Blizz
 - Read encrypted, unreleased game files
 - Use Blizzard trademarks in its name
 
+## License
+
+The code is released under the [MIT License](LICENSE). The license covers Altrobe's code only. It grants no rights to Blizzard's game content.
+
 ## Not affiliated with Blizzard
 
 Altrobe is a fan project. It is not affiliated with or endorsed by Blizzard Entertainment. World of Warcraft and World of Warcraft: Forever are trademarks of Blizzard Entertainment, Inc.
