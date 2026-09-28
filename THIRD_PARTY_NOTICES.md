@@ -4,7 +4,7 @@ Altrobe includes code ported from, and depends on, the open-source projects belo
 
 ## wow.export
 
-Parts of `tools/probe/Convert/` (M2, skin, skeleton, animation and BLP parsing), `tools/looks/looks.ts`, and `tools/viewer-test/` (`index.html`, `compositor.js`, `dress.js`, `m2-material.js`) are ported from [wow.export](https://github.com/Kruithne/wow.export). Each of those files says so in its header.
+Parts of `tools/probe/Convert/` and its port in `importer/src/Altrobe.Core/Convert/` (M2, skin, skeleton, animation and BLP parsing), `tools/looks/looks.ts`, and `tools/viewer-test/` (`index.html`, `compositor.js`, `dress.js`, `m2-material.js`) are ported from [wow.export](https://github.com/Kruithne/wow.export). Each of those files says so in its header.
 
 ```
 MIT License
