@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Altrobe look test</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { color-scheme: dark; --bg: #1b1d22; --panel: #24272e; --text: #e6e6e6; --muted: #9aa0aa; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 13px system-ui, sans-serif; }
+  #app { display: flex; height: 100%; }
+  #view { flex: 1; min-width: 0; }
+  #panel { width: 260px; overflow: auto; background: var(--panel); padding: 8px 12px; }
+  #panel h2 { font-size: 12px; margin: 10px 0 4px; color: var(--muted); font-weight: 600; }
+  label { display: inline-block; min-width: 72px; }
+  #status { color: var(--muted); }
+  #lookbar { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
+  #lookbar button { font: inherit; }
+  #shareLink { width: 100%; box-sizing: border-box; font: 11px ui-monospace, monospace; }
+  #notices { color: #e0b060; margin: 4px 0; padding-left: 16px; }
+  #notices:empty { display: none; }
+  #lookJson { font: 11px ui-monospace, monospace; white-space: pre-wrap; word-break: break-all; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="app">
+  <div id="view"></div>
+  <div id="panel">
+    <div id="status">loading...</div>
+    <div id="lookbar" hidden>
+      <button id="copyLink">Copy share link</button>
+      <button id="saveLook">Save look</button>
+      <input id="shareLink" readonly aria-label="Share link">
+    </div>
+    <ul id="notices"></ul>
+    <details id="lookState" hidden><summary>Look state</summary><pre id="lookJson"></pre></details>
+    <div id="toggles"></div>
+  </div>
+</div>
+<script type="module">
+// Portions ported from wow.export (https://github.com/Kruithne/wow.export), MIT License,
+// Copyright (c) Kruithne and Marlamin. Ported logic: item models placed at bone * T(attachment
+// position) (src/js/3D/renderers/M2RendererGL.js getAttachmentTransform).
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+import { compositeLook, toImageData } from './compositor.js';
+import { dress } from './dress.js';
+import { lookFromFragment, lookFromViewer, checkAgainstData, characterFor, defaultsFrom, dressStateFor,
+  canonicalJSON, shareUrl } from './look.js';
+import { m2Material } from './m2-material.js';
+
+// Serve the worktree root so ../../output/ resolves.
+//   ?look=orc-male | undead-female   data-driven geosets + composited textures (output/looks/<name>.json)
+//   ?models=hd|sd   (look mode) HD body (default) or the SD (original-style) body, as the game's graphics
+//                   setting switches; SD looks are output/looks/<name>-sd.json. Items resolve the same.
+//   ?model=<fdid>&texture=<fdid>&show=0,401,...   Step 3 mode: one texture on every mesh
+//   ?scale=0.5   composite at half the layout size (look mode)
+//   ?view=head|side|back   camera presets (default: front)
+//   ?pose=bind   show the bind pose instead of playing the Stand animation
+//   ?items=12640,231534,...   (look mode) equip items; slots come from each item's inventory type
+//   ?itemspeed=1   item animation speed (default 0.5, a by-eye match to the game)
+//   ?glow=0   hide attached-model submeshes that use additive blending (weapon glow planes)
+//   #look=<base64url JSON>   a saved look (look.js); when present it wins over ?look, ?models, ?items, ?view
+const params = new URLSearchParams(location.search);
+const notices = [];
+const fromFragment = lookFromFragment(location.hash);
+addEventListener('hashchange', () => location.reload());
+if (fromFragment) notices.push(...fromFragment.notices);
+// A look from the fragment names race and sex; the query form names the character file directly.
+const lookName = fromFragment ? (fromFragment.look && characterFor(fromFragment.look)) : params.get('look');
+const modelSet = fromFragment ? fromFragment.look?.models : params.get('models') === 'sd' ? 'sd' : 'hd';
+const baseLook = lookName ? await (await fetch(`../../output/looks/${lookName}${modelSet === 'sd' ? '-sd' : ''}.json`)).json() : null;
+
+// Resolved item JSON (tools/resolve) per item ID, or null when there is none for this character.
+const fetchResolved = id => fetch(`../../output/resolved/${lookName}/${id}.json`)
+  .then(r => r.ok ? r.json() : null, () => null).catch(() => null);
+
+// Dressing: whichever way the look arrived, it becomes a v1 saved look (look.js), is checked against
+// the loaded data, and is dressed from that. Share links and query params take the same path.
+let look = baseLook, dressed = null, savedLook = null;
+const defaults = defaultsFrom(baseLook);
+if (baseLook) {
+  let resolved;
+  if (fromFragment) {
+    const ids = [...new Set(Object.values(fromFragment.look.items))];
+    resolved = (await Promise.all(ids.map(async id => [id, await fetchResolved(id)]))).filter(([, r]) => r);
+    savedLook = fromFragment.look;
+  } else {
+    const itemIds = (params.get('items') ?? '').split(',').filter(Boolean).map(Number);
+    const list = await Promise.all(itemIds.map(async id => [id, await fetchResolved(id)]));
+    for (const [id, r] of list) if (!r || r.error) notices.push(`dropped item ${id}: no item data`);
+    resolved = list.filter(([, r]) => r && !r.error);
+    savedLook = lookFromViewer({ character: lookName, models: modelSet, build: baseLook.build ?? '',
+      resolvedItems: resolved.map(([, r]) => r), view: params.get('view') ?? 'front' });
+  }
+  const resolvedById = new Map(resolved);
+  const checked = checkAgainstData(savedLook, { build: baseLook.build, defaults, resolvedById });
+  savedLook = checked.look;
+  notices.push(...checked.notices);
+  const state = dressStateFor(savedLook);
+  dressed = dress(baseLook, state, resolvedById);
+  notices.push(...dressed.notes);
+  look = { ...baseLook, layers: [...baseLook.layers, ...dressed.layers], geosets: dressed.geosets };
+  window.lookState = state;
+  window.dressed = dressed;
+} else if (fromFragment) {
+  // A link we cannot show at all: say why and stop, rather than fall back to the Step 3 test model.
+  document.getElementById('status').textContent = 'cannot show this look';
+  document.getElementById('notices').replaceChildren(...notices.map(n => Object.assign(document.createElement('li'), { textContent: n })));
+  window.lookNotices = notices;
+  window.viewerReady = true;
+  await new Promise(() => {}); // halts this module; nothing below runs
+}
+const viewName = savedLook ? savedLook.cam.view : params.get('view');
+
+// Look panel: share link, download, notices, and the current look for debugging.
+window.look = savedLook;
+window.lookNotices = notices;
+window.shareLink = () => savedLook && shareUrl(location.href, savedLook, { defaults });
+function showLookPanel() {
+  document.getElementById('notices').replaceChildren(...notices.map(n => Object.assign(document.createElement('li'), { textContent: n })));
+  if (!savedLook) return;
+  document.getElementById('lookbar').hidden = false;
+  document.getElementById('lookState').hidden = false;
+  const json = canonicalJSON(savedLook, { defaults });
+  document.getElementById('lookJson').textContent = JSON.stringify(JSON.parse(json), null, 2);
+  const link = document.getElementById('shareLink');
+  link.value = window.shareLink();
+  document.getElementById('copyLink').onclick = async () => {
+    try { await navigator.clipboard.writeText(link.value); } catch { link.select(); document.execCommand('copy'); }
+  };
+  document.getElementById('saveLook').onclick = () => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([json + '\n'], { type: 'application/json' }));
+    a.download = `${lookName}${modelSet === 'sd' ? '-sd' : ''}.look.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+}
+showLookPanel();
+const fdid = look ? String(look.modelFileDataId) : params.get('model') ?? '917116';
+const textureFdid = params.get('texture');
+
+// Geoset group names from https://wowdev.wiki/M2/.skin (geoset = group * 100 + variant).
+const GROUPS = { 0: 'hair', 1: 'facial 1', 2: 'facial 2', 3: 'facial 3', 4: 'gloves', 5: 'boots', 7: 'ears',
+  8: 'sleeves', 9: 'legcuffs', 10: 'chest', 11: 'pants', 12: 'tabard', 13: 'trousers/robe', 15: 'cape',
+  16: 'facial jewelry', 17: 'eye glow', 18: 'belt', 19: 'tail/bones', 20: 'feet', 22: 'torso', 32: 'face', 33: 'eyes' };
+
+// Step 3 fallback set, chosen by eye for the Orc male body (917116). Look mode uses look.geosets,
+// which tools/looks/looks.ts derives from ChrCustomization data. ?show=0,401,... overrides both.
+const DEFAULTS = [0, 401, 501, 702, 1301, 1801, 2001, 2201, 3202, 3301];
+const show = params.get('show')?.split(',').map(Number) ?? look?.geosets ?? DEFAULTS;
+const isDefault = id => show.includes(id);
+
+const view = document.getElementById('view');
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(devicePixelRatio);
+view.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1b1d22);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x444450, 1.6));
+const sun = new THREE.DirectionalLight(0xffffff, 1.8);
+sun.position.set(2, 3, 4);
+scene.add(sun);
+const camera = new THREE.PerspectiveCamera(35, 1, 0.01, 100);
+const controls = new OrbitControls(camera, renderer.domElement);
+
+function resize() {
+  const w = view.clientWidth, h = view.clientHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize);
+resize();
+
+const grey = new THREE.MeshStandardMaterial({ color: 0x8a9a6a, roughness: 0.8 });
+let material = grey;
+if (textureFdid) {
+  const tex = await new THREE.TextureLoader().loadAsync(`../../output/textures/${textureFdid}.png`);
+  tex.flipY = false; // glTF/WoW UV origin is top-left
+  tex.colorSpace = THREE.SRGBColorSpace;
+  material = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8 });
+}
+
+// Look mode: composite every character texture type (1 skin, 6 hair, 19 eyes) in the browser,
+// including item layers. Texture type 0 loads its hardcoded FileDataID, type 2 on the body is the
+// cape (from a cloak), anything else stays grey and is listed in window.lookStats.uncovered.
+const composited = new Map();
+if (look) {
+  const scale = Number(params.get('scale') ?? 1);
+  const t0 = performance.now();
+  const { textures, stats } = await compositeLook(look, id => `../../output/textures/${id}.png`, { scale });
+  for (const [type, t] of textures) {
+    const tex = new THREE.DataTexture(t.pixels, t.width, t.height, THREE.RGBAFormat);
+    tex.flipY = false;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.magFilter = THREE.LinearFilter;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.generateMipmaps = true;
+    tex.needsUpdate = true;
+    composited.set(type, tex);
+  }
+  window.lookStats = { ...stats, totalMs: +(performance.now() - t0).toFixed(2), composited: textures.size,
+    itemLayers: dressed?.layers.length ?? 0, uncovered: [] };
+  window.lookTextures = textures;
+  window.lookImage = type => {
+    const t = textures.get(type);
+    const c = document.createElement('canvas');
+    c.width = t.width; c.height = t.height;
+    c.getContext('2d').putImageData(toImageData(t), 0, 0);
+    return c.toDataURL('image/png');
+  };
+}
+
+// Plain PNG textures (hardcoded type 0, cape, item skins), cached per FileDataID and wrap mode.
+const pngCache = new Map();
+function pngTexture(fileDataId, m2TextureFlags = 0) {
+  const key = `${fileDataId}:${m2TextureFlags & 3}`;
+  if (!pngCache.has(key)) pngCache.set(key, new THREE.TextureLoader().loadAsync(`../../output/textures/${fileDataId}.png`).then(tex => {
+    tex.flipY = false;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    // M2 texture flags: 0x1 wrap U, 0x2 wrap V (https://wowdev.wiki/M2#Textures).
+    tex.wrapS = m2TextureFlags & 1 ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping;
+    tex.wrapT = m2TextureFlags & 2 ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping;
+    return tex;
+  }, () => null));
+  return pngCache.get(key);
+}
+
+// Material for one submesh of a converted model: its first texture unit's first texture, drawn with
+// the unit's M2 material (blend mode and render flags). `replaceable` maps texture type -> FileDataID.
+const materialCache = new Map();
+async function submeshMaterial(meta, submeshIndex, replaceable) {
+  const unit = meta.geosets.find(g => g.submeshIndex === submeshIndex)?.textureUnits?.[0];
+  const first = unit?.textures?.[0];
+  if (!first) return { material: grey };
+  const flags = meta.textures[first.textureIndex]?.flags ?? 0;
+  let tex = null, key;
+  if (first.type === 0 && first.fileDataId) { tex = await pngTexture(first.fileDataId, flags); key = `png${first.fileDataId}`; }
+  else if (replaceable?.[first.type]) { tex = await pngTexture(replaceable[first.type], flags); key = `png${replaceable[first.type]}`; }
+  else if (look && composited.has(first.type)) { tex = composited.get(first.type); key = `chr${first.type}`; }
+  if (!tex) return { material: grey, missingType: first.type };
+  key += `:${unit.blendMode}:${unit.materialFlags}:${flags & 3}`;
+  if (!materialCache.has(key)) materialCache.set(key, m2Material(THREE, tex, unit.blendMode ?? 0, unit.materialFlags ?? 0));
+  return { material: materialCache.get(key), blendMode: unit.blendMode };
+}
+
+const meta = await (await fetch(`../../output/models/${fdid}.json`)).json();
+const gltf = await new GLTFLoader().loadAsync(`../../output/models/${fdid}.glb`);
+const meshesById = new Map();
+const meshes = [];
+gltf.scene.traverse(o => { if (o.isMesh) meshes.push(o); });
+for (const o of meshes) {
+  const data = { ...o.parent?.userData, ...o.userData };
+  const id = data.geosetId;
+  if (look) {
+    const r = await submeshMaterial(meta, data.submeshIndex, dressed?.replaceableTextures);
+    o.material = r.material;
+    if (r.missingType !== undefined && isDefault(id)) window.lookStats.uncovered.push({ submeshIndex: data.submeshIndex, geosetId: id, textureType: r.missingType });
+  } else o.material = material;
+  if (!meshesById.has(id)) meshesById.set(id, []);
+  meshesById.get(id).push(o);
+  o.visible = isDefault(id);
+}
+scene.add(gltf.scene);
+
+// Item models ride on the body's attachment nodes (children of the animated bones), so they follow
+// the Stand animation. Each attachment node's transform is bone * T(attachment position), which is
+// where wow.export's getAttachmentTransform puts item models.
+const attached = [];
+const itemMixers = [];
+if (dressed) {
+  const glow = params.get('glow') !== '0';
+  const t0 = performance.now();
+  await Promise.all(dressed.attachments.map(async a => {
+    const node = gltf.scene.getObjectByName(`attachment_${a.attachmentId}`);
+    if (!node) { notices.push(`no attachment ${a.attachmentId} on body model`); return; }
+    const [itemMeta, itemGltf] = await Promise.all([
+      fetch(`../../output/models/${a.modelFileDataId}.json`).then(r => r.json()),
+      new GLTFLoader().loadAsync(`../../output/models/${a.modelFileDataId}.glb`),
+    ]);
+    const list = [];
+    itemGltf.scene.traverse(o => { if (o.isMesh) list.push(o); });
+    for (const o of list) {
+      const data = { ...o.parent?.userData, ...o.userData };
+      const r = await submeshMaterial(itemMeta, data.submeshIndex, a.replaceableTextures);
+      o.material = r.material;
+      o.frustumCulled = false; // bounds are in the item's bind pose, not where the bone carries it
+      if (!glow && r.blendMode >= 3) o.visible = false;
+    }
+    itemGltf.scene.name = `item_${a.itemId}_${a.modelFileDataId}`;
+    // Item models with a skeleton (weapons) name their bones bone_<n> too. The body's mixer binds tracks
+    // by node name across the whole scene, so an unprefixed item bone can capture a body track and freeze
+    // that body bone. Prefix every node inside the item, and the item's own tracks to match. The separator
+    // is "__" because three.js track paths treat "/" as a directory and would match on the bare name.
+    const prefix = `${itemGltf.scene.name}__`;
+    itemGltf.scene.traverse(o => { if (o !== itemGltf.scene) o.name = prefix + o.name; });
+    for (const c of itemGltf.animations) for (const t of c.tracks) t.name = prefix + t.name;
+    // Items animate on their own clock. Weapons like Thunderfury drive their glow planes with global
+    // sequences only, so play Stand (if it has channels) plus every global-sequence clip.
+    const itemClips = (itemMeta.animations ?? []).filter(m => m.name && (m.globalSequence !== undefined || (m.id === 0 && m.variation === 0)))
+      .map(m => ({ m, c: itemGltf.animations.find(c => c.name === m.name) })).filter(x => x.c);
+    if (itemClips.length) {
+      const itemMixer = new THREE.AnimationMixer(itemGltf.scene);
+      // Item animations play at half speed by default. Our timing matches the file and wow.export's
+      // playback, but Thunderfury looked 3-4x faster than in game; 0.5 was the closest match by eye
+      // (2026-09-28). This is a stand-in, not a verified cause. ?itemspeed= overrides it.
+      itemMixer.timeScale = Number(params.get('itemspeed') ?? 0.5);
+      for (const { m, c } of itemClips) {
+        c.duration = Math.max(m.durationMs, 1) / 1000; // a 0 ms global sequence holds its first key
+        itemMixer.clipAction(c).play();
+      }
+      itemMixers.push(itemMixer);
+    }
+    node.add(itemGltf.scene);
+    attached.push({ ...a, node: node.name, bone: node.parent?.name, submeshes: list.length });
+  }));
+  window.attachStats = { ms: +(performance.now() - t0).toFixed(2), attached };
+}
+
+// Frame the visible default geosets. Every primitive shares one vertex buffer, so this is the bind-pose
+// box of the whole model; it avoids Box3.expandByObject, which skins every vertex on the CPU.
+const box = new THREE.Box3();
+for (const [id, list] of meshesById) if (isDefault(id)) list.forEach(m => {
+  if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+  box.union(m.geometry.boundingBox);
+});
+
+const toggles = document.getElementById('toggles');
+const ids = [...meshesById.keys()].sort((a, b) => a - b);
+let lastGroup = -1;
+for (const id of ids) {
+  const group = Math.floor(id / 100);
+  if (group !== lastGroup) {
+    const h = document.createElement('h2');
+    h.textContent = `${group}xx ${GROUPS[group] ?? ''}`;
+    toggles.appendChild(h);
+    lastGroup = group;
+  }
+  const label = document.createElement('label');
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.checked = isDefault(id);
+  cb.dataset.geoset = id;
+  cb.onchange = () => meshesById.get(id).forEach(m => (m.visible = cb.checked));
+  label.append(cb, ` ${id}`);
+  toggles.appendChild(label);
+}
+document.getElementById('status').textContent = `${look ? `look ${lookName} (${modelSet}), ` : ''}model ${fdid}: ${ids.length} geosets, ${ids.filter(isDefault).length} shown`;
+
+// Stand animation (ID 0, first variation) on loop, unless ?pose=bind. The converter records the
+// sequence's real duration; glTF clips otherwise end at their last keyframe.
+const pose = params.get('pose');
+let mixer = null;
+const standMeta = meta.animations?.find(a => a.id === 0 && a.variation === 0 && a.name);
+const clip = standMeta && gltf.animations.find(c => c.name === standMeta.name);
+if (clip && pose !== 'bind') {
+  clip.duration = standMeta.durationMs / 1000;
+  mixer = new THREE.AnimationMixer(gltf.scene);
+  mixer.clipAction(clip).play();
+}
+// Global sequences run on their own loop whatever else plays, bind pose included. Character models use
+// them for fixed per-race tweaks, e.g. the scale of the shoulder attachment bones (1.7 on the Orc male,
+// 0.65 on the Undead female), so without them shoulder items come out the same size on every race.
+const globalClips = (meta.animations ?? []).filter(a => a.globalSequence !== undefined && a.name)
+  .map(a => ({ a, c: gltf.animations.find(c => c.name === a.name) })).filter(x => x.c);
+if (globalClips.length) {
+  mixer ??= new THREE.AnimationMixer(gltf.scene);
+  for (const { a, c } of globalClips) {
+    c.duration = a.durationMs / 1000;
+    mixer.clipAction(c).play();
+  }
+}
+// Camera. Pose the skeleton at t=0 first so ?view=head can aim at the animated head.
+if (mixer) mixer.update(0);
+gltf.scene.updateMatrixWorld(true);
+const size = box.getSize(new THREE.Vector3()), center = box.getCenter(new THREE.Vector3());
+controls.target.copy(center);
+// WoW models face +X, which stays +X after the Y-up conversion, so look from +X. ?view=side looks from +Z.
+camera.position.set(center.x + size.y * 2.2, center.y, center.z);
+if (viewName === 'side') camera.position.set(center.x, center.y, center.z + size.y * 2.2);
+if (viewName === 'back') camera.position.set(center.x - size.y * 2.2, center.y, center.z);
+// ?view=head frames the face. Attachment 11 (helm) rides on the head bone, so it tracks the pose;
+// without it, fall back to the top of the bind-pose box.
+if (viewName === 'head') {
+  const helm = gltf.scene.getObjectByName('attachment_11');
+  const head = helm ? helm.getWorldPosition(new THREE.Vector3())
+    : new THREE.Vector3(center.x, box.max.y - size.y * 0.12, center.z);
+  if (helm) head.y -= size.y * 0.06;
+  controls.target.copy(head);
+  camera.position.set(head.x + size.y * 0.75, head.y, head.z);
+}
+controls.update();
+
+document.getElementById('status').textContent += (clip && pose !== 'bind' ? `, playing ${clip.name} (${clip.duration.toFixed(2)}s)` : clip ? ', bind pose' : ', no animation')
+  + (globalClips.length ? `, ${globalClips.length} global sequences` : '');
+
+// Test hooks: window.animation.pause()/setTime(t) make screenshots reproducible; frameStats counts frames.
+const clock = new THREE.Clock();
+let paused = false;
+window.animation = mixer && {
+  clip: clip?.name, duration: clip?.duration, globals: globalClips.map(g => g.c.name), itemMixers: itemMixers.length,
+  pause() { paused = true; },
+  setTime(t) { mixer.setTime(t); for (const m of itemMixers) m.setTime(t); },
+  time: () => mixer.time,
+};
+// World position of each attached item, after posing the skeleton (for movement checks).
+window.attachedWorld = () => {
+  gltf.scene.updateMatrixWorld(true);
+  return Object.fromEntries(attached.map(a => {
+    const o = gltf.scene.getObjectByName(`item_${a.itemId}_${a.modelFileDataId}`);
+    return [`${a.itemId}@${a.attachmentId}`, o.getWorldPosition(new THREE.Vector3()).toArray()];
+  }));
+};
+window.frameStats = { frames: 0, mixerMs: 0, renderMs: 0 };
+renderer.setAnimationLoop(() => {
+  const dt = clock.getDelta();
+  const t0 = performance.now();
+  if (mixer && !paused) mixer.update(dt);
+  if (!paused) for (const m of itemMixers) m.update(dt);
+  const t1 = performance.now();
+  controls.update();
+  renderer.render(scene, camera);
+  const t2 = performance.now();
+  window.frameStats.frames++;
+  window.frameStats.mixerMs += t1 - t0;
+  window.frameStats.renderMs += t2 - t1;
+});
+showLookPanel(); // attachment notices arrive after the first call
+window.scene = scene; // for probes that read node transforms (e.g. attachment world scale)
+window.viewerReady = true;
+</script>
+</body>
+</html>
