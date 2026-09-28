@@ -1,14 +1,23 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="DBCD" Version="2.3.1" />
     <PackageReference Include="TACTSharp" Version="0.2.0-alpha" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Definitions\*.dbd;Definitions\manifest.json" LogicalName="Definitions/%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Altrobe.Core.Tests" />
   </ItemGroup>
 
 </Project>

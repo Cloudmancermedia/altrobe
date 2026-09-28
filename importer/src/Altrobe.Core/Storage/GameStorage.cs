@@ -25,6 +25,7 @@ public sealed class GameStorage : IGameFiles
 
     public static BuildInstance CreateOfflineBuild(string installDir, string product, string tactCacheDir)
     {
+        Settings.LogLevel = TSLogLevel.Warn;
         var build = new BuildInstance();
         build.Settings.BaseDir = installDir;
         build.Settings.Product = product;
