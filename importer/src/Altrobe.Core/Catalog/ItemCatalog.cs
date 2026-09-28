@@ -3,17 +3,25 @@ using T = Altrobe.Core.Tables.GameTableNames;
 
 namespace Altrobe.Core.Catalog;
 
-public sealed record ItemSummary(int ItemId, string Name, int Slot, int Quality, int IconFileDataId);
+public sealed record ItemSummary(int ItemId, string Name, string Slot, int InventoryType, int Quality, int IconFileDataId);
 
-public sealed record ItemQuery(string? Text = null, IReadOnlyCollection<int>? Slots = null, IReadOnlyCollection<int>? Qualities = null, int Limit = 50, int Offset = 0);
+public sealed record ItemQuery(string? Text = null, IReadOnlyCollection<string>? Slots = null, IReadOnlyCollection<int>? Qualities = null, int Limit = 50, int Offset = 0);
 
 public sealed record ItemPage(int Total, IReadOnlyList<ItemSummary> Items);
 
-// Every item with a name and a visual: ItemModifiedAppearance -> ItemAppearance -> ItemDisplayInfo.
-// Slot is the item's InventoryType, as the game stores it (20 robe and 5 chest are both chest items).
+// Every wearable item with a name and a visual: ItemModifiedAppearance -> ItemAppearance ->
+// ItemDisplayInfo. Slot is the web app's look slot name for the item's InventoryType.
 public sealed class ItemCatalog
 {
     public const int MaxLimit = 200;
+
+    // Same mapping as the web app's dress.ts slotNameForInventoryType.
+    public static readonly IReadOnlyDictionary<int, string> SlotNames = new Dictionary<int, string>
+    {
+        [1] = "head", [2] = "neck", [3] = "shoulder", [4] = "shirt", [5] = "chest", [6] = "waist", [7] = "legs", [8] = "feet",
+        [9] = "wrist", [10] = "hands", [13] = "mainhand", [14] = "offhand", [15] = "mainhand", [16] = "back", [17] = "mainhand",
+        [19] = "tabard", [20] = "chest", [21] = "mainhand", [22] = "offhand", [23] = "offhand", [26] = "mainhand",
+    };
     readonly IReadOnlyList<ItemSummary> _items;
 
     public ItemCatalog(ITables tables)
@@ -31,10 +39,11 @@ public sealed class ItemCatalog
             .Select(x =>
             {
                 var s = sparse[x.itemId];
-                return new ItemSummary(x.itemId, s.Str("Display_lang"), s.Int("InventoryType"), s.Int("OverallQualityID"),
-                    item.TryGetValue(x.itemId, out var i) ? i.Int("IconFileDataID") : 0);
+                var inventoryType = s.Int("InventoryType");
+                return new ItemSummary(x.itemId, s.Str("Display_lang"), SlotNames.GetValueOrDefault(inventoryType, ""), inventoryType,
+                    s.Int("OverallQualityID"), item.TryGetValue(x.itemId, out var i) ? i.Int("IconFileDataID") : 0);
             })
-            .Where(i => i.Name.Length > 0)
+            .Where(i => i.Name.Length > 0 && i.Slot.Length > 0)
             .OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(i => i.ItemId)
             .ToList();
@@ -53,8 +62,9 @@ public sealed class ItemCatalog
         var limit = Math.Clamp(q.Limit, 1, MaxLimit);
         var offset = Math.Max(0, q.Offset);
         var text = q.Text?.Trim();
+        var id = int.TryParse(text, out var n) ? n : (int?)null;
         var matches = _items.Where(i =>
-            (string.IsNullOrEmpty(text) || i.Name.Contains(text, StringComparison.OrdinalIgnoreCase))
+            (string.IsNullOrEmpty(text) || i.Name.Contains(text, StringComparison.OrdinalIgnoreCase) || i.ItemId == id)
             && (q.Slots is not { Count: > 0 } || q.Slots.Contains(i.Slot))
             && (q.Qualities is not { Count: > 0 } || q.Qualities.Contains(i.Quality))).ToList();
         return new ItemPage(matches.Count, matches.Skip(offset).Take(limit).ToList());

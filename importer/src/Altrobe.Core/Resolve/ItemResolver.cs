@@ -29,6 +29,12 @@ public sealed record Attachment(int Slot, int AttachmentId, int ModelFileDataId,
 
 public sealed record ResolvedItem
 {
+    public string Build { get; init; } = "";
+    public int Race { get; init; }
+    public int Sex { get; init; }
+    // "hd" or "sd". Item files are chosen by race and sex only: no table the resolver reads
+    // distinguishes HD from SD bodies, and item section numbers map onto either body's layout.
+    public string ModelSet { get; init; } = "hd";
     public int ItemId { get; init; }
     public string Name { get; init; } = "";
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Error { get; init; }

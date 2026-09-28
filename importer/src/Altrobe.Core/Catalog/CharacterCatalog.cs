@@ -9,7 +9,7 @@ public sealed record ClassInfo(int ClassId, string Name);
 
 public sealed record SexAvailability(int Sex, bool Hd, bool Sd, int ChrModelId, int? SdChrModelId);
 
-public sealed record RaceInfo(int RaceId, string Name, string FemaleName, string ClientFileString, IReadOnlyList<SexAvailability> Sexes, IReadOnlyList<ClassInfo> Classes);
+public sealed record RaceInfo(int Race, string Name, string FemaleName, string ClientFileString, IReadOnlyList<SexAvailability> Sexes, IReadOnlyList<ClassInfo> Classes);
 
 // A race is playable iff it has a CharBaseInfo row (a race/class pair offered at character
 // creation). HD bodies come from ChrRaceXChrModel; SD bodies from ChrModelAltVariant, a table only
@@ -46,7 +46,7 @@ public sealed class CharacterCatalog
 
     public IReadOnlyList<RaceInfo> Races() => _races;
 
-    public RaceInfo? Race(int raceId) => _races.FirstOrDefault(r => r.RaceId == raceId);
+    public RaceInfo? Race(int raceId) => _races.FirstOrDefault(r => r.Race == raceId);
 
     // Null when the race is not playable or has no body of that kind.
     public int? ChrModelFor(int raceId, int sex, ModelSet set)

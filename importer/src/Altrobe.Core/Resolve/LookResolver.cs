@@ -22,7 +22,11 @@ using T = Altrobe.Core.Tables.GameTableNames;
 
 namespace Altrobe.Core.Resolve;
 
-public sealed record LayoutInfo(int Id, int Width, int Height);
+// Spike casing (the raw CharComponentTextureLayouts row), which the web app reads.
+public sealed record LayoutInfo(
+    [property: JsonPropertyName("ID")] int Id,
+    [property: JsonPropertyName("Width")] int Width,
+    [property: JsonPropertyName("Height")] int Height);
 
 public sealed record TextureSize(int TextureType, int Width, int Height);
 
@@ -48,26 +52,38 @@ public sealed record TextureLayer
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? RelatedChoiceId { get; init; }
 }
 
+// The default choice of one option, in the spike's looks.ts shape.
+public sealed record LookChoice(
+    int OptionId,
+    string Option,
+    long OptionFlags,
+    int? ChoiceId,
+    string Choice,
+    int? OrderIndex,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Skipped,
+    int EligibleChoices,
+    int TotalChoices,
+    int? WowExportChoiceId);
+
+// One selectable choice and what it changes: the geosets it shows (after the option's own
+// geosets are turned off) and the texture layers it paints.
 public sealed record ChoiceInfo(
     int ChoiceId,
     string Name,
     int OrderIndex,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Swatch,
     bool IsDefault,
-    bool Eligible,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? IneligibleReason,
     IReadOnlyList<int> Geosets,
     IReadOnlyList<TextureLayer> Layers);
 
+// Every choice a fresh character of the look's class can pick, by OrderIndex then ID. Geosets
+// lists every geoset any choice of the option names, which a choice change turns off first.
 public sealed record OptionInfo(
     int OptionId,
     string Name,
     long Flags,
     int OrderIndex,
     int? DefaultChoiceId,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Skipped,
-    int EligibleChoices,
-    int TotalChoices,
-    int? WowExportChoiceId,
     IReadOnlyList<int> Geosets,
     IReadOnlyList<ChoiceInfo> Choices);
 
@@ -87,6 +103,7 @@ public sealed record CharacterLook
     public IReadOnlyList<TextureSize> Textures { get; init; } = [];
     public IReadOnlyList<SectionRect> Sections { get; init; } = [];
     public IReadOnlyList<SectionLayer> SectionLayers { get; init; } = [];
+    public IReadOnlyList<LookChoice> Choices { get; init; } = [];
     public IReadOnlyList<int> Geosets { get; init; } = [];
     public IReadOnlyList<TextureLayer> Layers { get; init; } = [];
     public IReadOnlyList<OptionInfo> Options { get; init; } = [];
@@ -224,23 +241,31 @@ public sealed class LookResolver
             sectionLayers.Add(new SectionLayer(sectionType, l.Int("TextureType"), blend is 0 or 1 ? 15 : blend, l.Int("ID")));
         }
 
+        var choices = picks.Select(p =>
+        {
+            var flags = p.option.Long("Flags");
+            var byId = p.all.Select(c => c.choice).OrderBy(c => c.Int("ID")).FirstOrDefault();
+            return new LookChoice(
+                p.option.Int("ID"), p.option.Str("Name_lang"), flags,
+                p.choice?.Int("ID"), p.choice?.Str("Name_lang") ?? "", p.choice?.Int("OrderIndex"),
+                p.optFail ?? (p.choice == null ? "no eligible choice" : null),
+                p.all.Count(c => c.fail == null), p.all.Count,
+                (flags & 0x20) != 0 ? null : byId?.Int("ID"));
+        }).ToList();
+
         var optionInfos = picks.Select(p =>
         {
             var optionId = p.option.Int("ID");
-            var flags = p.option.Long("Flags");
-            var byId = p.all.Select(c => c.choice).OrderBy(c => c.Int("ID")).FirstOrDefault();
+            var selectable = p.optFail != null ? [] : p.all.Where(c => c.fail == null).Select(c => c.choice).ToList();
             return new OptionInfo(
-                optionId, p.option.Str("Name_lang"), flags, p.option.Int("OrderIndex"),
+                optionId, p.option.Str("Name_lang"), p.option.Long("Flags"), p.option.Int("OrderIndex"),
                 p.choice?.Int("ID"),
-                p.optFail ?? (p.choice == null ? "no eligible choice" : null),
-                p.all.Count(c => c.fail == null), p.all.Count,
-                (flags & 0x20) != 0 ? null : byId?.Int("ID"),
                 OptionGeosets(optionId, null).Order().ToList(),
-                p.all.Select(c => new ChoiceInfo(
-                    c.choice.Int("ID"), c.choice.Str("Name_lang"), c.choice.Int("OrderIndex"),
-                    c.choice == p.choice, c.fail == null, c.fail,
-                    ChoiceGeosets(c.choice.Int("ID"), null).Order().ToList(),
-                    ChoiceLayers(c.choice.Int("ID"), optionId, layoutId, raceId, sex, classId, null))).ToList());
+                selectable.Select(c => new ChoiceInfo(
+                    c.Int("ID"), c.Str("Name_lang"), c.Int("OrderIndex"), Swatch(c),
+                    c == p.choice,
+                    ChoiceGeosets(c.Int("ID"), null).Order().ToList(),
+                    ChoiceLayers(c.Int("ID"), optionId, layoutId, raceId, sex, classId, null))).ToList());
         }).ToList();
 
         var layout = _layouts.TryGetValue(layoutId, out var lr) ? new LayoutInfo(layoutId, lr.Int("Width"), lr.Int("Height")) : new LayoutInfo(layoutId, 0, 0);
@@ -259,6 +284,7 @@ public sealed class LookResolver
             Textures = _materialsByLayout.Of(layoutId).Select(m => new TextureSize(m.Int("TextureType"), m.Int("Width"), m.Int("Height"))).ToList(),
             Sections = _sectionsByLayout.Of(layoutId).Select(ToRect).ToList(),
             SectionLayers = sectionLayers,
+            Choices = choices,
             Geosets = geosets,
             Layers = layers,
             Options = optionInfos,
@@ -266,6 +292,13 @@ public sealed class LookResolver
             UnsupportedElements = unsupported,
             Notes = notes,
         };
+    }
+
+    // SwatchColor[0] is 0xAARRGGBB; 0 means the choice has no swatch.
+    static string? Swatch(Row choice)
+    {
+        var c = choice.Int("SwatchColor", 0);
+        return c == 0 ? null : $"#{c & 0xFFFFFF:x6}";
     }
 
     static SectionRect ToRect(Row s) => new(s.Int("SectionType"), s.Int("X"), s.Int("Y"), s.Int("Width"), s.Int("Height"));

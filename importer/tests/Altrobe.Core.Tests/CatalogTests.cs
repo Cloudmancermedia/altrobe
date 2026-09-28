@@ -48,7 +48,7 @@ public class ItemCatalogTests
     public void CarriesSlotQualityAndIcon()
     {
         var thunderfury = Catalog().Search(new ItemQuery("THUNDERfury")).Items.Single();
-        Assert.Equal(new ItemSummary(2, "Thunderfury, Blessed Blade of the Windseeker", 13, 5, 1002), thunderfury);
+        Assert.Equal(new ItemSummary(2, "Thunderfury, Blessed Blade of the Windseeker", "mainhand", 13, 5, 1002), thunderfury);
     }
 
     [Fact]
@@ -63,9 +63,28 @@ public class ItemCatalogTests
     public void FiltersBySlotAndQuality()
     {
         var c = Catalog();
-        Assert.Equal([1, 3], c.Search(new ItemQuery("robe", Slots: [20])).Items.Select(i => i.ItemId));
-        Assert.Equal([4, 1, 3], c.Search(new ItemQuery("robe", Slots: [5, 20])).Items.Select(i => i.ItemId));
-        Assert.Equal([1], c.Search(new ItemQuery(Slots: [20], Qualities: [4])).Items.Select(i => i.ItemId));
+        // Robes (InventoryType 20) and chest pieces (5) share the "chest" slot.
+        Assert.Equal([4, 1, 3], c.Search(new ItemQuery("robe", Slots: ["chest"])).Items.Select(i => i.ItemId));
+        Assert.Equal([2], c.Search(new ItemQuery(Slots: ["mainhand"])).Items.Select(i => i.ItemId));
+        Assert.Equal([2], c.Search(new ItemQuery(Slots: ["mainhand", "head"])).Items.Select(i => i.ItemId));
+        Assert.Equal([1], c.Search(new ItemQuery(Slots: ["chest"], Qualities: [4])).Items.Select(i => i.ItemId));
+    }
+
+    [Fact]
+    public void AnItemIdAlsoMatches()
+    {
+        Assert.Equal([2], Catalog().Search(new ItemQuery("2")).Items.Select(i => i.ItemId));
+    }
+
+    [Fact]
+    public void LeavesOutItemsThatAreNotWorn()
+    {
+        var t = new InMemoryTables()
+            .Add(GameTableNames.ItemSparse, R(("ID", 1), ("Display_lang", "Band of Robes"), ("InventoryType", (byte)11)))
+            .Add(GameTableNames.ItemModifiedAppearance, R(("ID", 1), ("ItemID", 1), ("ItemAppearanceID", 1)))
+            .Add(GameTableNames.ItemAppearance, R(("ID", 1), ("ItemDisplayInfoID", 1)))
+            .Add(GameTableNames.ItemDisplayInfo, R(("ID", 1)));
+        Assert.Equal(0, new ItemCatalog(t).Count);
     }
 
     [Fact]
@@ -118,14 +137,14 @@ public class CharacterCatalogTests
     public void ARaceIsPlayableIffItHasACharBaseInfoRow()
     {
         var races = new CharacterCatalog(Tables()).Races();
-        Assert.Equal([1, 2, 95], races.Select(r => r.RaceId));
+        Assert.Equal([1, 2, 95], races.Select(r => r.Race));
         Assert.Equal(["Human", "Orc", "High Order Skyborne"], races.Select(r => r.Name));
     }
 
     [Fact]
     public void ListsClassesPerRaceFromCharBaseInfo()
     {
-        var orc = new CharacterCatalog(Tables()).Races().Single(r => r.RaceId == 2);
+        var orc = new CharacterCatalog(Tables()).Races().Single(r => r.Race == 2);
         Assert.Equal([(1, "Warrior"), (3, "Hunter")], orc.Classes.Select(c => (c.ClassId, c.Name)));
     }
 
@@ -133,10 +152,10 @@ public class CharacterCatalogTests
     public void ReportsHdAndSdPerSex()
     {
         var races = new CharacterCatalog(Tables()).Races();
-        var orc = races.Single(r => r.RaceId == 2);
+        var orc = races.Single(r => r.Race == 2);
         Assert.Equal([new SexAvailability(0, true, true, 3, 259), new SexAvailability(1, true, false, 4, null)], orc.Sexes);
 
-        var skyborne = races.Single(r => r.RaceId == 95);
+        var skyborne = races.Single(r => r.Race == 95);
         Assert.All(skyborne.Sexes, s => Assert.False(s.Sd));
     }
 

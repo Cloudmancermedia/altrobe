@@ -139,10 +139,22 @@ public class LookResolverTests
         Assert.Null(defaults[41]);
         Assert.Equal([19, 20, 30, 40, 41, 50], look.Options.Select(o => o.OptionId));
 
+        // Options list only the choices a fresh warrior can pick.
         var skin = look.Options[0];
-        Assert.Equal([false, false, true, false], skin.Choices.Select(c => c.IsDefault));
-        Assert.Equal([false, false, true, true], skin.Choices.Select(c => c.Eligible));
-        Assert.NotNull(look.Options.Single(o => o.OptionId == 40).Skipped);
+        Assert.Equal([353, 354], skin.Choices.Select(c => c.ChoiceId));
+        Assert.Equal([true, false], skin.Choices.Select(c => c.IsDefault));
+        Assert.Empty(look.Options.Single(o => o.OptionId == 40).Choices);
+        Assert.Empty(look.Options.Single(o => o.OptionId == 41).Choices);
+
+        // The spike-shaped defaults, one per option.
+        Assert.Equal([19, 20, 30, 40, 41, 50], look.Choices.Select(c => c.OptionId));
+        var skinDefault = look.Choices[0];
+        Assert.Equal((353, 2, 2, 4), (skinDefault.ChoiceId!.Value, skinDefault.OrderIndex!.Value, skinDefault.EligibleChoices, skinDefault.TotalChoices));
+        // wow.export leaves 0x20 options unset and otherwise takes the lowest choice ID.
+        Assert.Null(skinDefault.WowExportChoiceId);
+        Assert.Equal(384, look.Choices[1].WowExportChoiceId);
+        Assert.NotNull(look.Choices.Single(c => c.OptionId == 40).Skipped);
+        Assert.Equal("no eligible choice", look.Choices.Single(c => c.OptionId == 41).Skipped);
     }
 
     [Fact]
@@ -195,6 +207,18 @@ public class LookResolverTests
         Assert.Equal([1301, 1302, 2001], legs.Geosets);
         Assert.Equal([1302, 2001], legs.Choices[0].Geosets);
         Assert.Equal([1301], legs.Choices[1].Geosets);
+    }
+
+    [Fact]
+    public void ChoicesCarryTheirSwatchColor()
+    {
+        var t = Tables().Add(GameTableNames.ChrCustomizationOption, R(("ID", 60), ("Name_lang", "Hair Color"), ("ChrModelID", HdModel), ("OrderIndex", 6)))
+            .Add(GameTableNames.ChrCustomizationChoice,
+                R(("ID", 600), ("Name_lang", "Red"), ("ChrCustomizationOptionID", 60), ("OrderIndex", 0), ("SwatchColor", new[] { unchecked((int)0xFFC03020), 0 })),
+                R(("ID", 601), ("Name_lang", "Plain"), ("ChrCustomizationOptionID", 60), ("OrderIndex", 1), ("SwatchColor", new[] { 0, 0 })));
+        var look = new LookResolver(t).Resolve(Orc, Male, Warrior, ModelSet.Hd, _ => HdMesh)!;
+        var hair = look.Options.Single(o => o.OptionId == 60);
+        Assert.Equal(["#c03020", null], hair.Choices.Select(c => c.Swatch));
     }
 
     [Fact]
