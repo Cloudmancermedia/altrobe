@@ -65,6 +65,7 @@ import { m2Material } from './m2-material.js';
 //   ?view=head|side|back   camera presets (default: front)
 //   ?pose=bind   show the bind pose instead of playing the Stand animation
 //   ?items=12640,231534,...   (look mode) equip items; slots come from each item's inventory type
+//   ?itemspeed=0.3   scale item animation speed (diagnostic)
 //   ?glow=0   hide attached-model submeshes that use additive blending (weapon glow planes)
 //   #look=<base64url JSON>   a saved look (look.js); when present it wins over ?look, ?models, ?items, ?view
 const params = new URLSearchParams(location.search);
@@ -309,6 +310,9 @@ if (dressed) {
       .map(m => ({ m, c: itemGltf.animations.find(c => c.name === m.name) })).filter(x => x.c);
     if (itemClips.length) {
       const itemMixer = new THREE.AnimationMixer(itemGltf.scene);
+      // ?itemspeed= scales item animation playback (diagnostic). Our timing matches the file and
+      // wow.export, but Thunderfury looks 3-4x faster than in game; this lets us measure the gap by eye.
+      itemMixer.timeScale = Number(params.get('itemspeed') ?? 1);
       for (const { m, c } of itemClips) {
         c.duration = Math.max(m.durationMs, 1) / 1000; // a 0 ms global sequence holds its first key
         itemMixer.clipAction(c).play();
