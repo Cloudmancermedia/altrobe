@@ -5,5 +5,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Altrobe.Core.Tests/Altrobe.Core.Tests.csproj" />
+    <Project Path="tests/Altrobe.Server.Tests/Altrobe.Server.Tests.csproj" />
   </Folder>
 </Solution>
