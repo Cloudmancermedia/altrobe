@@ -275,6 +275,7 @@ scene.add(gltf.scene);
 // the Stand animation. Each attachment node's transform is bone * T(attachment position), which is
 // where wow.export's getAttachmentTransform puts item models.
 const attached = [];
+const itemMixers = [];
 if (dressed) {
   const glow = params.get('glow') !== '0';
   const t0 = performance.now();
@@ -297,8 +298,23 @@ if (dressed) {
     itemGltf.scene.name = `item_${a.itemId}_${a.modelFileDataId}`;
     // Item models with a skeleton (weapons) name their bones bone_<n> too. The body's mixer binds tracks
     // by node name across the whole scene, so an unprefixed item bone can capture a body track and freeze
-    // that body bone. Prefix every node inside the item to keep names unique.
-    itemGltf.scene.traverse(o => { if (o !== itemGltf.scene) o.name = `${itemGltf.scene.name}/${o.name}`; });
+    // that body bone. Prefix every node inside the item, and the item's own tracks to match. The separator
+    // is "__" because three.js track paths treat "/" as a directory and would match on the bare name.
+    const prefix = `${itemGltf.scene.name}__`;
+    itemGltf.scene.traverse(o => { if (o !== itemGltf.scene) o.name = prefix + o.name; });
+    for (const c of itemGltf.animations) for (const t of c.tracks) t.name = prefix + t.name;
+    // Items animate on their own clock. Weapons like Thunderfury drive their glow planes with global
+    // sequences only, so play Stand (if it has channels) plus every global-sequence clip.
+    const itemClips = (itemMeta.animations ?? []).filter(m => m.name && (m.globalSequence !== undefined || (m.id === 0 && m.variation === 0)))
+      .map(m => ({ m, c: itemGltf.animations.find(c => c.name === m.name) })).filter(x => x.c);
+    if (itemClips.length) {
+      const itemMixer = new THREE.AnimationMixer(itemGltf.scene);
+      for (const { m, c } of itemClips) {
+        c.duration = Math.max(m.durationMs, 1) / 1000; // a 0 ms global sequence holds its first key
+        itemMixer.clipAction(c).play();
+      }
+      itemMixers.push(itemMixer);
+    }
     node.add(itemGltf.scene);
     attached.push({ ...a, node: node.name, bone: node.parent?.name, submeshes: list.length });
   }));
@@ -386,9 +402,9 @@ document.getElementById('status').textContent += (clip && pose !== 'bind' ? `, p
 const clock = new THREE.Clock();
 let paused = false;
 window.animation = mixer && {
-  clip: clip?.name, duration: clip?.duration, globals: globalClips.map(g => g.c.name),
+  clip: clip?.name, duration: clip?.duration, globals: globalClips.map(g => g.c.name), itemMixers: itemMixers.length,
   pause() { paused = true; },
-  setTime(t) { mixer.setTime(t); },
+  setTime(t) { mixer.setTime(t); for (const m of itemMixers) m.setTime(t); },
   time: () => mixer.time,
 };
 // World position of each attached item, after posing the skeleton (for movement checks).
@@ -404,6 +420,7 @@ renderer.setAnimationLoop(() => {
   const dt = clock.getDelta();
   const t0 = performance.now();
   if (mixer && !paused) mixer.update(dt);
+  if (!paused) for (const m of itemMixers) m.update(dt);
   const t1 = performance.now();
   controls.update();
   renderer.render(scene, camera);
