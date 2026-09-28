@@ -17,8 +17,11 @@ public sealed class TestApp : WebApplicationFactory<Program>
     public const uint TextureFdid = 9001;
     readonly string _root = Path.Combine(Path.GetTempPath(), "altrobe-server-tests", Guid.NewGuid().ToString("N"));
 
-    public TestApp()
+    readonly bool _openBrowser;
+
+    public TestApp(bool openBrowser = false)
     {
+        _openBrowser = openBrowser;
         InstallDir = Path.Combine(_root, "World of Warcraft");
         CacheRoot = Path.Combine(_root, "cache");
         WebRoot = Path.Combine(_root, "web");
@@ -48,7 +51,7 @@ public sealed class TestApp : WebApplicationFactory<Program>
             s.AddSingleton<IInstallSource>(new FixedInstalls([InstallDir]));
             s.AddSingleton<IBuildSessionFactory>(new FakeSessions(this));
             s.AddSingleton<IBrowserLauncher>(new RecordingBrowser(OpenedUrls));
-            s.AddSingleton(new ServerSettings { CacheRoot = CacheRoot, WebRoot = WebRoot, OpenBrowser = false });
+            s.AddSingleton(new ServerSettings { CacheRoot = CacheRoot, WebRoot = WebRoot, OpenBrowser = _openBrowser });
         });
     }
 
