@@ -1,32 +1,30 @@
-# React + TypeScript + Vite
+# Altrobe web app
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+The dressing room UI: a React app with a three.js viewer. The local Altrobe server serves the built app and its API (`/api/v1`) on the same origin, along with converted models and textures under `/assets/{build}/`.
 
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```sh
+npm install
+npm run build   # type-check, then build into dist/
+npm run lint    # oxlint
+npm test        # Vitest unit tests
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Running without the server
+
+`npm run dev:spike` starts `vite dev` with a dev-only adapter (`dev/spike-adapter.ts`) that answers the API from the Phase 1 spike's converted files. Point it at the spike's `output/` folder:
+
+```sh
+ALTROBE_SPIKE_OUTPUT=/path/to/spike/output npm run dev:spike -- --port 5199
+```
+
+The adapter reads those files at request time and copies nothing into the repository. It covers what the spike converted: the Orc male and Undead female (HD and SD), and resolved data for the spike's handful of items. Set `ALTROBE_DEV_NO_INSTALL=1` to start with no install selected and try the install picker. A production build never includes the adapter.
+
+With the real server, build the app and let the server serve `dist/`.
+
+## Layout
+
+- `src/api/` holds the API types and the one client module that fetches from the server.
+- `src/viewer/` holds dressing (`dress.ts`), skin compositing, M2 materials, the character builder and the shared three.js stage.
+- `src/look/look.ts` reads, writes and checks saved looks. `docs/look-format.md` describes the format.
+- `src/commands.ts` is the command API that the UI calls, and that Phase 3's plain-language layer will call.
+- `src/components/` holds the panels.

@@ -1,0 +1,114 @@
+import { useEffect, useState } from 'react'
+import { ApiError, textureUrl } from '../api/client'
+import type { ItemSearchResult } from '../api/types'
+import { commands, store } from '../app-state'
+import { QUALITY_NAMES, SLOT_LABELS } from '../labels'
+import type { Look } from '../look/look'
+import { rememberItems, setNotices, useStore } from '../store'
+import { SLOT_ORDER, type SlotName } from '../viewer/dress'
+
+const PAGE = 50
+
+export function ItemIcon({ build, fileDataId, quality }: { build: string; fileDataId?: number; quality?: number }) {
+  const [failed, setFailed] = useState(false)
+  const cls = `icon q${quality ?? 1}`
+  // Icons are ordinary converted textures; an install that has not converted one gets a blank tile.
+  if (!fileDataId || failed) return <span className={`${cls} blank`} aria-hidden="true" />
+  return <img className={cls} src={textureUrl(build, fileDataId)} alt="" width={32} height={32} loading="lazy" onError={() => setFailed(true)} />
+}
+
+export function ItemSearch({ build }: { build: string }) {
+  const [q, setQ] = useState('')
+  const [slot, setSlot] = useState('')
+  const [quality, setQuality] = useState('')
+  const [results, setResults] = useState<ItemSearchResult[]>([])
+  const [state, setState] = useState<'idle' | 'loading' | 'error'>('idle')
+  const [more, setMore] = useState(false)
+  const [offset, setOffset] = useState(0)
+
+  useEffect(() => {
+    const ctrl = new AbortController()
+    const t = setTimeout(() => {
+      setState('loading')
+      commands.search_items({ q: q.trim(), slot, quality: quality === '' ? undefined : Number(quality), limit: PAGE + 1, offset })
+        .then((r) => {
+          if (ctrl.signal.aborted) return
+          rememberItems(store, r)
+          setMore(r.length > PAGE)
+          setResults((prev) => (offset === 0 ? r.slice(0, PAGE) : [...prev, ...r.slice(0, PAGE)]))
+          setState('idle')
+        }, (e) => {
+          if (ctrl.signal.aborted) return
+          setState('error')
+          setNotices(store, 'search', [`item search failed: ${e instanceof ApiError ? e.message : String(e)}`])
+        })
+    }, 250)
+    return () => { clearTimeout(t); ctrl.abort() }
+  }, [q, slot, quality, offset])
+
+  const reset = <T,>(set: (v: T) => void) => (v: T) => { setOffset(0); set(v) }
+
+  return (
+    <section className="panel search" aria-labelledby="search-heading">
+      <h2 id="search-heading">Find items</h2>
+      <div className="search-controls">
+        <input type="search" placeholder="Search by name" aria-label="Search items by name" value={q} onChange={(e) => reset(setQ)(e.target.value)} />
+        <select aria-label="Slot" value={slot} onChange={(e) => reset(setSlot)(e.target.value)}>
+          <option value="">Any slot</option>
+          {SLOT_ORDER.map((s) => <option key={s} value={s}>{SLOT_LABELS[s]}</option>)}
+        </select>
+        <select aria-label="Quality" value={quality} onChange={(e) => reset(setQuality)(e.target.value)}>
+          <option value="">Any quality</option>
+          {QUALITY_NAMES.map((n, i) => <option key={n} value={i}>{n}</option>)}
+        </select>
+      </div>
+      <ul className="results" aria-live="polite" aria-busy={state === 'loading'}>
+        {results.map((r) => (
+          <li key={r.itemId}>
+            <button type="button" className="result" onClick={() => commands.equip_item(r.slot, r.itemId)}
+              title={`Equip in ${SLOT_LABELS[r.slot as SlotName] ?? r.slot}`}>
+              <ItemIcon build={build} fileDataId={r.iconFileDataId} quality={r.quality} />
+              <span className="result-text">
+                <span className={`qname q${r.quality}`}>{r.name}</span>
+                <span className="muted small">{SLOT_LABELS[r.slot as SlotName] ?? r.slot} · {r.itemId}</span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {state === 'idle' && results.length === 0 && <p className="muted small">No items match.</p>}
+      {state === 'loading' && <p className="muted small">Searching…</p>}
+      {more && state !== 'loading' && <button type="button" onClick={() => setOffset(offset + PAGE)}>Show more</button>}
+    </section>
+  )
+}
+
+export function SlotPanel({ look, build }: { look: Look; build: string }) {
+  const info = useStore(store, (s) => s.itemInfo)
+  const equipped = SLOT_ORDER.filter((s) => look.items[s])
+  return (
+    <section className="panel" aria-labelledby="slots-heading">
+      <h2 id="slots-heading">Equipped</h2>
+      {equipped.length === 0 && <p className="muted small">Nothing equipped. Pick items from the search below.</p>}
+      <ul className="slots">
+        {equipped.map((slot) => {
+          const id = look.items[slot]!
+          const i = info[id]
+          const hidden = look.hide.includes(slot)
+          return (
+            <li key={slot} className={hidden ? 'hidden-slot' : undefined}>
+              <ItemIcon build={build} fileDataId={i?.iconFileDataId} quality={i?.quality} />
+              <span className="result-text">
+                <span className={`qname q${i?.quality ?? 1}`}>{i?.name ?? `Item ${id}`}</span>
+                <span className="muted small">{SLOT_LABELS[slot]}{hidden ? ' · hidden' : ''}</span>
+              </span>
+              <button type="button" aria-pressed={hidden} onClick={() => commands.set_visibility(slot, hidden)}
+                aria-label={`${hidden ? 'Show' : 'Hide'} ${SLOT_LABELS[slot]}`}>{hidden ? 'Show' : 'Hide'}</button>
+              <button type="button" onClick={() => commands.unequip(slot)} aria-label={`Clear ${SLOT_LABELS[slot]}`}>Clear</button>
+            </li>
+          )
+        })}
+      </ul>
+    </section>
+  )
+}
