@@ -15,7 +15,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            rid: linux-x64
+          - os: macos-latest
+            rid: osx-arm64
+          - os: windows-latest
+            rid: win-x64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -51,5 +57,9 @@ jobs:
       - name: Web unit tests
         run: npm --prefix web test
 
-      - name: Build the web app
-        run: npm --prefix web run build
+      # Builds the web app too. The smoke test proves the downloadable package starts and serves it.
+      - name: Package the app
+        run: npm run package -- ${{ matrix.rid }} --version 0.1.0-dev
+
+      - name: Smoke test the package
+        run: npm run smoke:package -- dist-packages/Altrobe-0.1.0-dev-${{ matrix.rid }}.zip
