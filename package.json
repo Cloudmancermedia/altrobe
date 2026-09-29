@@ -11,6 +11,8 @@
     "start": "node scripts/start.mjs",
     "dev": "node scripts/dev.mjs",
     "test": "node scripts/setup.mjs && node scripts/check-no-game-content.mjs && node --test scripts/lib.test.mjs && dotnet test importer && npm --prefix web run lint && npm --prefix web test",
-    "check:content": "node scripts/check-no-game-content.mjs"
+    "check:content": "node scripts/check-no-game-content.mjs",
+    "package": "node scripts/package.mjs",
+    "smoke:package": "node scripts/smoke-package.mjs"
   }
 }
