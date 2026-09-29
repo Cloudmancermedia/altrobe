@@ -81,6 +81,10 @@ The tools are the web app's command API: `search_items`, `search_sets`, `equip_s
 `reset_customization`, `compare`, `set_visibility`, `set_view` and `share_link`.
 
 - `search_items`, `search_sets` and `list_characters` run on the server and work with no tab open.
+  `search_items` also filters by required level (`min_level`, `max_level`), armor type (`armor`:
+  cloth, leather, mail or plate, from `Item.SubclassID`) and class (`class_id`, from
+  `ItemSparse.AllowableClass`), and its results carry `requiredLevel`, `itemLevel` and `armor`.
+  Class does not cover armor proficiency, so a model picks the armor type itself.
   The two searches list only real items and sets; developer, test and NPC items are left out, though
   an exact item ID still finds one. The search panel in the web app lists them, last.
 - Some items have a model but no name, quality or level in the build (in the Forever beta, all of

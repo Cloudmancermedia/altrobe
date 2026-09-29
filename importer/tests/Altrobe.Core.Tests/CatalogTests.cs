@@ -99,10 +99,39 @@ public class ItemCatalogTests
     }
 
     [Fact]
+    public void FiltersByRequiredLevelArmorTypeAndClass()
+    {
+        // (id, name, inventory type, armor subclass, required level, item level, class mask)
+        var rows = new[] {
+            (1, "Frayed Robe", 20, 1, 5, 8, -1), (2, "Robe of the Archmage", 20, 1, 57, 62, 1 << 7), (3, "Wolf Rider's Leggings", 7, 2, 27, 32, -1),
+            (4, "Chain Hauberk", 5, 3, 30, 35, -1), (5, "Warlord's Plate Armor", 5, 4, 60, 74, 1), (6, "Sword of Might", 13, 0, 31, 36, -1) };
+        var t = new InMemoryTables();
+        foreach (var (id, name, inv, sub, req, ilvl, mask) in rows)
+            t.Add(GameTableNames.ItemSparse, R(("ID", id), ("Display_lang", name), ("InventoryType", (byte)inv), ("OverallQualityID", (byte)2),
+                    ("RequiredLevel", req), ("ItemLevel", ilvl), ("AllowableClass", mask)))
+                .Add(GameTableNames.Item, R(("ID", id), ("InventoryType", (byte)inv), ("ClassID", id == 6 ? 2 : 4), ("SubclassID", sub)))
+                .Add(GameTableNames.ItemModifiedAppearance, R(("ID", id), ("ItemID", id), ("ItemAppearanceModifierID", 0), ("OrderIndex", 0), ("ItemAppearanceID", id)))
+                .Add(GameTableNames.ItemAppearance, R(("ID", id), ("ItemDisplayInfoID", id)))
+                .Add(GameTableNames.ItemDisplayInfo, R(("ID", id)));
+        var c = new ItemCatalog(t);
+        int[] Ids(ItemQuery q) => c.Search(q).Items.Select(i => i.ItemId).Order().ToArray();
+
+        Assert.Equal([3, 4, 6], Ids(new ItemQuery(MinLevel: 25, MaxLevel: 35)));
+        Assert.Equal([3], Ids(new ItemQuery(MinLevel: 25, MaxLevel: 35, Armor: ["leather"])));
+        Assert.Equal([3, 4], Ids(new ItemQuery(Armor: ["leather", "mail"])));
+        // A warrior (class 1) can use item 5 but not the mage-only robe.
+        Assert.Equal([1, 3, 4, 5, 6], Ids(new ItemQuery(ClassId: 1)));
+        Assert.Equal([1, 2, 3, 4, 6], Ids(new ItemQuery(ClassId: 8)));
+        var robe = c.Get(2)!;
+        Assert.Equal((57, 62, "cloth"), (robe.RequiredLevel, robe.ItemLevel, robe.Armor));
+        Assert.Null(c.Get(6)!.Armor);
+    }
+
+    [Fact]
     public void CarriesSlotQualityAndIcon()
     {
         var thunderfury = Catalog().Search(new ItemQuery("THUNDERfury")).Items.Single();
-        Assert.Equal(new ItemSummary(2, "Thunderfury, Blessed Blade of the Windseeker", "mainhand", 13, 5, 1002), thunderfury);
+        Assert.Equal((2, "Thunderfury, Blessed Blade of the Windseeker", "mainhand", 13, 5, 1002), (thunderfury.ItemId, thunderfury.Name, thunderfury.Slot, thunderfury.InventoryType, thunderfury.Quality, thunderfury.IconFileDataId));
     }
 
     [Fact]

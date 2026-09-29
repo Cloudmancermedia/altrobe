@@ -7,10 +7,21 @@ namespace Altrobe.Core.Catalog;
 // unless asked for, and listed last when included.
 // Unnamed: the build has a model for the item but no ItemSparse row, so no name, quality or level.
 // Its name is made up from its set and slot (or its slot and ID), and it is listed after named items.
-public sealed record ItemSummary(int ItemId, string Name, string Slot, int InventoryType, int Quality, int IconFileDataId, bool Internal = false, bool Unnamed = false);
+// RequiredLevel and ItemLevel are null for unnamed items. Armor is cloth, leather, mail or plate, else
+// null. AllowableClass is ItemSparse's class mask (bit classId - 1; -1 for any class).
+public sealed record ItemSummary(int ItemId, string Name, string Slot, int InventoryType, int Quality, int IconFileDataId, bool Internal = false, bool Unnamed = false)
+{
+    public int? RequiredLevel { get; init; }
+    public int? ItemLevel { get; init; }
+    public string? Armor { get; init; }
+    public int AllowableClass { get; init; } = -1;
+}
 
 // IncludeInternal: also list developer and NPC items. An exact item ID finds one either way.
-public sealed record ItemQuery(string? Text = null, IReadOnlyCollection<string>? Slots = null, IReadOnlyCollection<int>? Qualities = null, int Limit = 50, int Offset = 0, bool IncludeInternal = false);
+// MinLevel and MaxLevel bound the required level; items with no known level (unnamed) never match them.
+// Armor: armor types to keep. ClassId: leave out items restricted to other classes.
+public sealed record ItemQuery(string? Text = null, IReadOnlyCollection<string>? Slots = null, IReadOnlyCollection<int>? Qualities = null, int Limit = 50, int Offset = 0, bool IncludeInternal = false,
+    int? MinLevel = null, int? MaxLevel = null, IReadOnlyCollection<string>? Armor = null, int? ClassId = null);
 
 public sealed record ItemPage(int Total, IReadOnlyList<ItemSummary> Items);
 
@@ -21,6 +32,10 @@ public sealed class ItemCatalog
     public const int MaxLimit = 200;
     // Quality of an unnamed item, whose ItemSparse row (and so its quality) is missing.
     public const int UnknownQuality = -1;
+    // Item class 4 (armor) subclasses.
+    public static readonly IReadOnlyDictionary<int, string> ArmorTypes = new Dictionary<int, string> { [1] = "cloth", [2] = "leather", [3] = "mail", [4] = "plate" };
+
+    static string? ArmorOf(Row? item) => item != null && item.Int("ClassID") == 4 ? ArmorTypes.GetValueOrDefault(item.Int("SubclassID")) : null;
 
     // Same mapping as the web app's dress.ts slotNameForInventoryType.
     public static readonly IReadOnlyDictionary<int, string> SlotNames = new Dictionary<int, string>
@@ -67,12 +82,15 @@ public sealed class ItemCatalog
                     var inventoryType = s.Int("InventoryType");
                     var name = s.Str("Display_lang");
                     return new ItemSummary(x.itemId, name, SlotNames.GetValueOrDefault(inventoryType, ""), inventoryType,
-                        s.Int("OverallQualityID"), icon, IsInternal(name));
+                        s.Int("OverallQualityID"), icon, IsInternal(name))
+                    {
+                        RequiredLevel = s.Int("RequiredLevel"), ItemLevel = s.Int("ItemLevel"), Armor = ArmorOf(i), AllowableClass = s.Int("AllowableClass"),
+                    };
                 }
                 var type = i!.Int("InventoryType");
                 var slot = SlotNames.GetValueOrDefault(type, "");
                 var made = setOf.TryGetValue(x.itemId, out var setName) ? $"{setName}: {slot}" : $"Unnamed {slot} (item {x.itemId})";
-                return new ItemSummary(x.itemId, made, slot, type, UnknownQuality, icon, setName is not null && IsInternal(setName), Unnamed: true);
+                return new ItemSummary(x.itemId, made, slot, type, UnknownQuality, icon, setName is not null && IsInternal(setName), Unnamed: true) { Armor = ArmorOf(i) };
             })
             .Where(i => i.Name.Length > 0 && i.Slot.Length > 0)
             .OrderBy(i => i.Internal)
@@ -106,7 +124,11 @@ public sealed class ItemCatalog
         var matches = _items.Where(i =>
             (i.ItemId == id || ((q.IncludeInternal || !i.Internal) && (string.IsNullOrEmpty(text) || i.Name.Contains(text, StringComparison.OrdinalIgnoreCase))))
             && (q.Slots is not { Count: > 0 } || q.Slots.Contains(i.Slot))
-            && (q.Qualities is not { Count: > 0 } || q.Qualities.Contains(i.Quality))).ToList();
+            && (q.Qualities is not { Count: > 0 } || q.Qualities.Contains(i.Quality))
+            && (q.MinLevel is not { } min || i.RequiredLevel >= min)
+            && (q.MaxLevel is not { } max || i.RequiredLevel <= max)
+            && (q.Armor is not { Count: > 0 } || (i.Armor != null && q.Armor.Contains(i.Armor)))
+            && (q.ClassId is not { } cls || i.AllowableClass == -1 || (i.AllowableClass & (1 << (cls - 1))) != 0)).ToList();
         return new ItemPage(matches.Count, matches.Skip(offset).Take(limit).ToList());
     }
 }

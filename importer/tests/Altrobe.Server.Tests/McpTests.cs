@@ -102,6 +102,17 @@ public class McpTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task SearchFiltersByLevelArmorAndClass()
+    {
+        var client = await Client();
+        var r = JsonNode.Parse(Text(await client.CallToolAsync("search_items", new Dictionary<string, object?> { ["min_level"] = 20, ["max_level"] = 40, ["armor"] = "leather" }, cancellationToken: Ct)))!;
+        var item = r["items"]!.AsArray().Single()!;
+        Assert.Equal((7, 30, "leather"), (item["itemId"]!.GetValue<int>(), item["requiredLevel"]!.GetValue<int>(), item["armor"]!.GetValue<string>()));
+        var bad = await client.CallToolAsync("search_items", new Dictionary<string, object?> { ["armor"] = "wood" }, cancellationToken: Ct);
+        Assert.True(bad.IsError);
+    }
+
+    [Fact]
     public async Task LookCommandsNeedAnOpenTab()
     {
         var r = await (await Client()).CallToolAsync("get_look", cancellationToken: Ct);

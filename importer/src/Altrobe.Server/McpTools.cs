@@ -30,8 +30,10 @@ public sealed class McpTools(AppState state, TabSession tab)
           pieces rather than inventing one; the set name is real.
         - Race IDs come from list_characters. Customization option and choice IDs come from get_look.
         - compare shows the main character's outfit on up to 3 more characters; they all wear the same items.
-        - The catalog holds each item's name, slot and quality. It does not know where an item drops, which
-          quest gives it, or its level. If you choose items from your own knowledge of the game, say so.
+        - The catalog holds each item's name, slot, quality, required level, item level and armor type, and
+          search_items filters on them: for a level 30 warrior, try min_level 25, max_level 32, armor mail,
+          class_id 1. It does not know where an item drops or which quest gives it. If you pick items by
+          source from your own knowledge of the game, say so.
         - Look changes need an open Altrobe tab. If a tool says none is open, ask the user to open Altrobe.
         """;
 
@@ -54,16 +56,28 @@ public sealed class McpTools(AppState state, TabSession tab)
     }
 
     [McpServerTool(Name = "search_items", ReadOnly = true)]
-    [Description("World of Warcraft: Forever dressing room (Altrobe). Search the item catalog by name or item ID. Only items with a visual are listed. Use the returned itemId with equip_item; never guess IDs.")]
+    [Description("World of Warcraft: Forever dressing room (Altrobe). Search the item catalog by name or item ID, and filter by slot, quality, required level, armor type and class. Only items with a visual are listed. Use the returned itemId with equip_item; never guess IDs.")]
     public string SearchItems(
-        [Description("Part of the item name, or an item ID. Leave empty to browse by slot or quality.")] string? query = null,
+        [Description("Part of the item name, or an item ID. Leave empty to browse by the filters.")] string? query = null,
         [Description($"Look slot to filter by: {Slots}")] string? slot = null,
         [Description("Quality to filter by: 0 poor, 1 common, 2 uncommon, 3 rare, 4 epic, 5 legendary")] int? quality = null,
+        [Description("Lowest required level")] int? min_level = null,
+        [Description("Highest required level")] int? max_level = null,
+        [Description("Armor type: cloth, leather, mail or plate. Comma-separate several.")] string? armor = null,
+        [Description("Class ID (from list_characters): leave out items only other classes can use. It does not check armor proficiency; pick the armor type for that.")] int? class_id = null,
         [Description("Results to return, 1-50")] int limit = 20,
         [Description("Results to skip, for paging")] int offset = 0)
     {
-        var page = Session.Items.Search(new ItemQuery(query, slot is null ? null : [slot], quality is null ? null : [quality.Value], Math.Clamp(limit, 1, 50), offset));
-        return JsonSerializer.Serialize(new { total = page.Total, items = page.Items.Select(i => new { i.ItemId, i.Name, i.Slot, quality = i.Unnamed ? (int?)null : i.Quality, i.Internal, i.Unnamed }) }, Json);
+        var armorTypes = armor?.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Select(a => a.ToLowerInvariant()).ToList();
+        if (armorTypes?.FirstOrDefault(a => !ItemCatalog.ArmorTypes.Values.Contains(a)) is { } badArmor)
+            throw new McpException($"Unknown armor type \"{badArmor}\". Use cloth, leather, mail or plate.");
+        var page = Session.Items.Search(new ItemQuery(query, slot is null ? null : [slot], quality is null ? null : [quality.Value], Math.Clamp(limit, 1, 50), offset,
+            MinLevel: min_level, MaxLevel: max_level, Armor: armorTypes, ClassId: class_id));
+        return JsonSerializer.Serialize(new
+        {
+            total = page.Total,
+            items = page.Items.Select(i => new { i.ItemId, i.Name, i.Slot, quality = i.Unnamed ? (int?)null : i.Quality, i.RequiredLevel, i.ItemLevel, i.Armor, i.Internal, i.Unnamed }),
+        }, Json);
     }
 
     [McpServerTool(Name = "search_sets", ReadOnly = true)]
