@@ -81,3 +81,6 @@ button.link { background: none; border: none; padding: 0 2px; color: var(--muted
   .side.left, .side.right { border: none; }
   .share-link { display: none; }
 }
+
+.actions { display: flex; gap: 6px; margin-bottom: 10px; }
+.actions button { flex: 1; white-space: nowrap; }

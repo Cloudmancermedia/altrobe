@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import type { CharactersResponse, ItemSearchResult, Status } from './api/types'
+import type { CharactersResponse, CustomizationOption, ItemSearchResult, Status } from './api/types'
 import { emptyLook, type Look } from './look/look'
 
 export interface ItemInfo {
@@ -16,6 +16,8 @@ export interface AppState {
   characters: CharactersResponse | null
   /** Default choice per option ID for the main character, from its base look. */
   defaults: Record<string, number>
+  /** Every customization option and its choices for the main character, from its base look. */
+  options: CustomizationOption[]
   /** Names and icons for item IDs seen in search results or resolved data. */
   itemInfo: Record<number, ItemInfo>
 }
@@ -49,6 +51,7 @@ export const initialState = (): AppState => ({
   status: null,
   characters: null,
   defaults: {},
+  options: [],
   itemInfo: {},
 })
 

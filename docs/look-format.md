@@ -39,7 +39,7 @@ A share link is the app URL plus `#look=` and the base64url encoding of the cano
 
 Reading is forgiving. Unknown fields are ignored, bad entries are dropped, and each drop is reported as a notice in the app. Only a look that cannot be drawn at all fails: not an object, a `v` below 1 or not an integer, another `game`, or no valid race and sex. A look with no `v` is read as v1, and a look with a higher `v` is read as v1 with its unknown fields ignored.
 
-Against the loaded game data, the app also drops items it has no data for, items in a slot their inventory type does not fit (a one-hander may go in `offhand`), and customization options the character does not have. Non-default choices are kept but not drawn yet, and the app says so.
+Against the loaded game data, the app also drops items it has no data for, items in a slot their inventory type does not fit (a one-hander may go in `offhand`), and customization options or choices the character does not have. Each drop comes with a notice.
 
 ## Changes since the spike
 

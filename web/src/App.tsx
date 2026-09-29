@@ -110,7 +110,7 @@ export default function App() {
 
   const mainBase = useBaseLook(look.race, look.sex, look.models, phase === 'ready')
   useEffect(() => {
-    if (mainBase) store.set({ defaults: defaultsFrom(mainBase) })
+    if (mainBase) store.set({ defaults: defaultsFrom(mainBase), options: mainBase.options ?? [] })
   }, [mainBase])
 
   const cells: ViewerCell[] = useMemo(() => [

@@ -105,6 +105,8 @@ public sealed record CharacterLook
     public IReadOnlyList<SectionLayer> SectionLayers { get; init; } = [];
     public IReadOnlyList<LookChoice> Choices { get; init; } = [];
     public IReadOnlyList<int> Geosets { get; init; } = [];
+    // Every geoset in the body mesh. The web app drops choice geosets that are not in it.
+    public IReadOnlyList<int> MeshGeosets { get; init; } = [];
     public IReadOnlyList<TextureLayer> Layers { get; init; } = [];
     public IReadOnlyList<OptionInfo> Options { get; init; } = [];
     public IReadOnlyList<GeosetsFromChoice> GeosetsFromChoices { get; init; } = [];
@@ -286,6 +288,7 @@ public sealed class LookResolver
             SectionLayers = sectionLayers,
             Choices = choices,
             Geosets = geosets,
+            MeshGeosets = mesh,
             Layers = layers,
             Options = optionInfos,
             GeosetsFromChoices = fromChoices,

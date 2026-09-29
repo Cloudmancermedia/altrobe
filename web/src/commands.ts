@@ -2,11 +2,12 @@
 // plain-language layer will call the same ones. `transitions` are pure (look in, look out);
 // createCommands wires them to the app store and the server.
 
-import type { CharactersResponse, ItemSearchQuery, ItemSearchResult, ModelSet } from './api/types'
+import type { CharactersResponse, CustomizationOption, ItemSearchQuery, ItemSearchResult, ModelSet } from './api/types'
 import {
   MAX_COMPARE, MODEL_SETS, VIEWS, canonicalLook, normalizeLook, shareUrl,
   type CompareCharacter, type Look, type View,
 } from './look/look'
+import { randomCustomization } from './viewer/customize'
 import { isSlotName, type SlotName } from './viewer/dress'
 import type { AppState, Store } from './store'
 
@@ -48,9 +49,26 @@ export const transitions = {
     return { look: { ...look, race, sex: sex as 0 | 1, models, custom: same ? look.custom : {} } }
   },
 
-  setCustomization(look: Look, optionId: number, choiceId: number): Result {
+  /** `options` are the main character's, from its base look; without them only the IDs' shape is checked. */
+  setCustomization(look: Look, optionId: number, choiceId: number, options?: CustomizationOption[] | null): Result {
     if (!isId(optionId) || !isId(choiceId)) return { error: `not an option ID and choice ID: ${optionId}, ${choiceId}` }
+    if (options?.length) {
+      const o = options.find((x) => x.optionId === optionId)
+      if (!o) return { error: `no customization option ${optionId} for this character` }
+      if (!o.choices.some((c) => c.choiceId === choiceId)) return { error: `${o.name || `option ${optionId}`} has no choice ${choiceId}` }
+    }
     return { look: { ...look, custom: { ...look.custom, [String(optionId)]: choiceId } } }
+  },
+
+  /** A random choice for every option of the main character. */
+  randomizeCustomization(look: Look, options: CustomizationOption[] | null | undefined, random?: () => number): Result {
+    if (!options?.length) return { error: 'no customization options for this character yet' }
+    return { look: { ...look, custom: randomCustomization(options, random) } }
+  },
+
+  /** Back to the default choice for every option. */
+  resetCustomization(look: Look): Result {
+    return { look: { ...look, custom: {} } }
   },
 
   /** The characters shown next to the main one, in order; at most MAX_COMPARE. */
@@ -110,7 +128,9 @@ export function createCommands({ store, searchItems, appUrl }: CommandContext) {
     unequip: (slot: SlotName | string) => apply(transitions.unequip(look(), slot)),
     set_character: (race: number, sex: number, models?: ModelSet) =>
       apply(transitions.setCharacter(look(), race, sex, models, characters())),
-    set_customization: (optionId: number, choiceId: number) => apply(transitions.setCustomization(look(), optionId, choiceId)),
+    set_customization: (optionId: number, choiceId: number) => apply(transitions.setCustomization(look(), optionId, choiceId, store.get().options)),
+    randomize_customization: () => apply(transitions.randomizeCustomization(look(), store.get().options)),
+    reset_customization: () => apply(transitions.resetCustomization(look())),
     compare: (list: { race: number; sex: number; models?: ModelSet }[]) => apply(transitions.compare(look(), list, characters())),
     set_visibility: (slot: SlotName | string, visible: boolean) => apply(transitions.setVisibility(look(), slot, visible)),
     set_view: (view: View | string) => apply(transitions.setView(look(), view)),

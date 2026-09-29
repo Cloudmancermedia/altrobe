@@ -174,6 +174,16 @@ public class LookResolverTests
     }
 
     [Fact]
+    public void MeshGeosetsListEveryGeosetInTheBodyModel()
+    {
+        // The web app filters non-default choices' geosets by this list, the way the server filters the defaults.
+        var look = Look();
+        Assert.DoesNotContain(200, look.MeshGeosets);
+        Assert.Contains(1301, look.MeshGeosets);
+        Assert.Equal(look.MeshGeosets.Order(), look.MeshGeosets);
+    }
+
+    [Fact]
     public void TextureLayersResolveSectionsAndRaceGenderClassTextures()
     {
         var look = Look();

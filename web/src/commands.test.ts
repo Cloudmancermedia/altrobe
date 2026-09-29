@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import type { CharactersResponse, ItemSearchResult } from './api/types'
+import type { CharactersResponse, CustomizationOption, ItemSearchResult } from './api/types'
 import { createCommands, transitions } from './commands'
 import { decodeLook, emptyLook } from './look/look'
 import { createStore, initialState } from './store'
@@ -60,6 +60,24 @@ describe('transitions', () => {
   test('set_customization stores choice IDs by option ID', () => {
     expect(transitions.setCustomization(bare, 20, 390).look!.custom).toEqual({ 20: 390 })
     expect(transitions.setCustomization(bare, 0, 390).error).toBeDefined()
+  })
+
+  const options: CustomizationOption[] = [
+    { optionId: 19, name: 'Skin Color', defaultChoiceId: 353, choices: [{ choiceId: 353, name: '' }, { choiceId: 354, name: '' }] },
+    { optionId: 20, name: 'Face', defaultChoiceId: 384, choices: [{ choiceId: 384, name: '' }, { choiceId: 390, name: '' }] },
+  ]
+
+  test('set_customization checks the choice against the options when they are known', () => {
+    expect(transitions.setCustomization(bare, 20, 390, options).look!.custom).toEqual({ 20: 390 })
+    expect(transitions.setCustomization(bare, 20, 999, options).error).toMatch(/Face has no choice 999/)
+    expect(transitions.setCustomization(bare, 7, 1, options).error).toMatch(/no customization option 7/)
+  })
+
+  test('randomize picks a choice for every option; reset clears them', () => {
+    const r = transitions.randomizeCustomization(bare, options, () => 0.99).look!
+    expect(r.custom).toEqual({ 19: 354, 20: 390 })
+    expect(transitions.randomizeCustomization(bare, []).error).toMatch(/no customization options/)
+    expect(transitions.resetCustomization(r).look!.custom).toEqual({})
   })
 
   test('compare sets up to three extra characters, in order', () => {

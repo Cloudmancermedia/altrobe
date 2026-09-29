@@ -186,15 +186,21 @@ export function defaultsFrom(baseLook: { choices?: { optionId: number; choiceId:
   return Object.fromEntries((baseLook?.choices ?? []).filter((c) => isId(c.choiceId)).map((c) => [String(c.optionId), c.choiceId as number]))
 }
 
+/** Selectable choice IDs per option ID from a base look. */
+export function choicesFrom(baseLook: { options?: { optionId: number; choices: { choiceId: number }[] }[] } | null | undefined): Record<string, number[]> {
+  return Object.fromEntries((baseLook?.options ?? []).map((o) => [String(o.optionId), o.choices.map((c) => c.choiceId)]))
+}
+
 /**
  * Checks a normalized look against the loaded game data and drops what cannot be shown.
  * @param data.build  the build of the loaded data
  * @param data.defaults  from defaultsFrom()
+ * @param data.choices  from choicesFrom(); when given, a choice not listed for its option is dropped
  * @param data.resolvedById  resolved item data; a missing entry means the item has no data for this character
  * @returns a new look plus notices
  */
-export function checkAgainstData(look: Look, { build, defaults, resolvedById }: {
-  build?: string; defaults?: Record<string, number>; resolvedById?: Map<number, ResolvedItem | null>
+export function checkAgainstData(look: Look, { build, defaults, choices, resolvedById }: {
+  build?: string; defaults?: Record<string, number>; choices?: Record<string, number[]>; resolvedById?: Map<number, ResolvedItem | null>
 } = {}): { look: Look; notices: string[] } {
   const notices: string[] = []
   const out: Look = { ...look, custom: { ...look.custom }, items: { ...look.items }, hide: [...look.hide], cam: { ...look.cam }, compare: [...look.compare] }
@@ -202,7 +208,10 @@ export function checkAgainstData(look: Look, { build, defaults, resolvedById }: 
   if (defaults) for (const [opt, choice] of Object.entries(out.custom)) {
     if (!(opt in defaults)) { notices.push(`dropped customization option ${opt}: not an option for this character (${look.models})`); delete out.custom[opt] }
     else if (defaults[opt] === choice) delete out.custom[opt]
-    else notices.push(`customization ${opt}=${choice} kept but not drawn: this viewer only draws the default choices`)
+    else if (choices?.[opt] && !choices[opt].includes(choice)) {
+      notices.push(`dropped customization ${opt}=${choice}: not a choice for this character (${look.models})`)
+      delete out.custom[opt]
+    }
   }
   if (resolvedById) for (const [slot, id] of Object.entries(out.items) as [SlotName, number][]) {
     const r = resolvedById.get(id)

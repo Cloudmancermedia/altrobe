@@ -77,6 +77,7 @@ export function CharacterPanel({ characters, look }: { characters: CharactersRes
 }
 
 export function CustomizationPanel({ look }: { look: Look }) {
+  const changed = Object.keys(look.custom).length > 0
   const baseLook = useBaseLook(look.race, look.sex, look.models)
   if (!baseLook) return null
   // The base look names only the default choice per option; `options` (all choices) is optional.
@@ -93,9 +94,14 @@ export function CustomizationPanel({ look }: { look: Look }) {
   return (
     <section className="panel" aria-labelledby="custom-heading">
       <h2 id="custom-heading">Customization</h2>
+      <div className="actions">
+        <button type="button" onClick={() => commands.randomize_customization()} title="Pick a random choice for every option">
+          <span aria-hidden="true">🎲</span> Randomize
+        </button>
+        <button type="button" onClick={() => commands.reset_customization()} disabled={!changed}>Reset to defaults</button>
+      </div>
       {options.map((o) => {
         const value = look.custom[String(o.optionId)] ?? o.defaultChoiceId ?? o.choices[0].choiceId
-        const isDefault = value === o.defaultChoiceId
         const current = o.choices.find((c) => c.choiceId === value)
         const id = `opt-${o.optionId}`
         return (
@@ -103,8 +109,7 @@ export function CustomizationPanel({ look }: { look: Look }) {
             <label htmlFor={id}>{o.name}</label>
             <div className="choice">
               {current?.swatch && <span className="swatch" style={{ background: current.swatch }} aria-hidden="true" />}
-              <select id={id} value={value} onChange={(e) => commands.set_customization(o.optionId, Number(e.target.value))}
-                aria-describedby={isDefault ? undefined : `${id}-note`}>
+              <select id={id} value={value} onChange={(e) => commands.set_customization(o.optionId, Number(e.target.value))}>
                 {o.choices.map((c, i) => (
                   <option key={c.choiceId} value={c.choiceId}>
                     {c.name || `#${i + 1}`}{c.choiceId === o.defaultChoiceId ? ' (default)' : ''}
@@ -112,7 +117,6 @@ export function CustomizationPanel({ look }: { look: Look }) {
                 ))}
               </select>
             </div>
-            {!isDefault && <span id={`${id}-note`} className="tag">preview uses defaults</span>}
           </div>
         )
       })}

@@ -122,7 +122,7 @@ test('a look for a character the server has no data for gets a notice', () => {
 test('checkAgainstData drops items without data or in the wrong slot, and flags build and choices', () => {
   const look = norm({ ...outfitA, items: { head: 12640, chest: 999999, feet: 19019, offhand: 19019 }, custom: { 19: 353, 20: 390, 5: 1 } })
   const resolvedById = new Map([[12640, item(12640, 1)], [19019, item(19019, 13)]])
-  const r = checkAgainstData(look, { build: '1.60.2.1', defaults: { 19: 353, 20: 384 }, resolvedById })
+  const r = checkAgainstData(look, { build: '1.60.2.1', defaults: { 19: 353, 20: 384 }, choices: { 19: [353, 354], 20: [384, 390] }, resolvedById })
   expect(r.look.items).toEqual({ head: 12640, offhand: 19019 }) // one-hander may go in the off hand
   expect(r.look.custom).toEqual({ 20: 390 })
   const text = r.notices.join('\n')
@@ -130,7 +130,10 @@ test('checkAgainstData drops items without data or in the wrong slot, and flags 
   expect(text).toMatch(/dropped chest item 999999: no item data/)
   expect(text).toMatch(/dropped feet item 19019: inventory type 13/)
   expect(text).toMatch(/dropped customization option 5/)
-  expect(text).toMatch(/20=390 kept but not drawn/)
+  expect(text).not.toMatch(/not drawn/)
+  const bad = checkAgainstData(norm({ ...outfitA, custom: { 20: 391 } }), { defaults: { 20: 384 }, choices: { 20: [384, 390] } })
+  expect(bad.look.custom).toEqual({})
+  expect(bad.notices).toEqual(['dropped customization 20=391: not a choice for this character (hd)'])
   expect(look.items.chest, 'input look is not mutated').toBe(999999)
   expect(checkAgainstData(norm(outfitA), { build: '1.60.1.70009' }).notices).toEqual([])
 })

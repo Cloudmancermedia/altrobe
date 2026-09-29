@@ -41,6 +41,8 @@ export interface Character {
   /** Bind-pose box of the shown geosets, for framing. */
   box: THREE.Box3
   attached: AttachedItem[]
+  /** What was drawn: the geosets shown and the texture files composited, in layer order. */
+  drawn: { geosets: number[]; layerFiles: number[] }
   notices: string[]
   mixer: THREE.AnimationMixer | null
   itemMixers: THREE.AnimationMixer[]
@@ -219,6 +221,7 @@ export async function buildCharacter({ baseLook, dressed, assets, itemSpeed = 0.
 
   return {
     root, box, attached, notices, mixer, itemMixers,
+    drawn: { geosets: look.geosets, layerFiles: look.layers.map((l) => l.fileDataId) },
     update(dt) {
       mixer?.update(dt)
       for (const m of itemMixers) m.update(dt)
