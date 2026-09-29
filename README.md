@@ -2,7 +2,51 @@
 
 A dressing room for World of Warcraft: Forever, in the browser. See the same outfit on different races, save a look, and share it as a link.
 
-Early development. The local server runs; see [docs/local-server.md](docs/local-server.md).
+Early development.
+
+## Developer quick start
+
+You need:
+
+- the [.NET 10 SDK](https://dotnet.microsoft.com/download)
+- [Node.js](https://nodejs.org) 20 or newer
+- World of Warcraft: Forever installed on the same machine
+
+```sh
+git clone https://github.com/Cloudmancermedia/altrobe.git && cd altrobe && npm start
+```
+
+`npm start` installs the web app's dependencies if they are missing, builds the web app, then
+compiles and runs the local server at `http://127.0.0.1:5161/` and opens it in your browser. On
+the first run:
+
+1. The server looks for your game in `ALTROBE_WOW_PATH`, then `/Applications/World of Warcraft`,
+   `C:\Program Files (x86)\World of Warcraft` and `C:\Program Files\World of Warcraft`.
+2. The page lists the products it found and asks which to use. Pick Forever: for build
+   1.60.1.70009 it is listed as `wow_classic_beta 1.60.1.70009`.
+3. Each character and item is converted from your install the first time you view it, so the
+   first look at a character takes a few seconds. Converted files are cached in `~/.altrobe`
+   (Windows: `%LOCALAPPDATA%\Altrobe`); deleting that folder is safe.
+
+Nothing is downloaded from Blizzard. The server only reads your local install.
+
+Other commands, all from the repository root:
+
+| Command | What it does |
+| --- | --- |
+| `npm run dev` | Runs the server without opening a browser, and Vite with hot reload on `http://localhost:5173/`. Ctrl+C stops both. |
+| `npm test` | Checks that no game content is tracked, then runs the .NET tests, lints the web app and runs its unit tests. |
+| `npm --prefix web run test:e2e` | Browser checks against your real install. Opt-in: run `npx --prefix web playwright install chromium` once, then set `ALTROBE_E2E=1`. Without it they skip. |
+
+`ALTROBE_WOW_PATH`, `ALTROBE_PORT`, `ALTROBE_CACHE_DIR` and `ALTROBE_NO_BROWSER=1` work with
+`npm start` and `npm run dev`. [docs/local-server.md](docs/local-server.md) covers the server's
+options and API, and [web/README.md](web/README.md) the web app and its browser checks.
+
+So far this has been tried only on macOS. The scripts are written for Windows and Linux too, and CI
+is set up to build and test on both, but nobody has run the app end to end there yet.
+
+`tools/` holds the Phase 1 spike. The server and web app replace it; it stays as a historical
+reference.
 
 ## How it gets its data
 
