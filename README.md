@@ -4,6 +4,31 @@ A dressing room for World of Warcraft: Forever, in the browser. See the same out
 
 Early development.
 
+## Download and run
+
+You need World of Warcraft: Forever installed on the same computer. You don't need .NET, Node.js
+or anything else.
+
+1. Open [Releases](https://github.com/Cloudmancermedia/altrobe/releases) and download the zip for
+   your computer:
+   - Windows: `Altrobe-<version>-win-x64.zip`
+   - Mac with Apple silicon (M1 and later): `Altrobe-<version>-osx-arm64.zip`
+   - Mac with an Intel processor: `Altrobe-<version>-osx-x64.zip`
+   - Linux: `Altrobe-<version>-linux-x64.zip`
+2. Unzip it.
+3. Start Altrobe. On Windows, double-click `Altrobe.exe`. On macOS, double-click `Altrobe`, which
+   opens in a Terminal window. On Linux, run `./Altrobe` from a terminal in that folder.
+4. Altrobe isn't signed, so the first start shows a warning:
+   - Windows SmartScreen: click **More info**, then **Run anyway**.
+   - macOS: click **Done**, then open System Settings > Privacy & Security and click
+     **Open Anyway** next to the Altrobe message. On macOS 14 and earlier, you can instead
+     right-click Altrobe and choose **Open**. From Terminal,
+     `xattr -dr com.apple.quarantine <the unzipped folder>` does the same.
+5. Your browser opens Altrobe at `http://127.0.0.1:5161/`. To stop it, close the window it runs in.
+
+`READ ME FIRST.txt` in the zip covers the same steps, plus what to do if Altrobe can't find your
+game. Altrobe reads your game files on your own computer. It never contacts Blizzard.
+
 ## Developer quick start
 
 You need:
@@ -36,6 +61,7 @@ Other commands, all from the repository root:
 | --- | --- |
 | `npm run dev` | Runs the server without opening a browser, and Vite with hot reload on `http://localhost:5173/`. Ctrl+C stops both. |
 | `npm test` | Checks that no game content is tracked, then runs the .NET tests, lints the web app and runs its unit tests. |
+| `npm run package -- <rid>` | Builds a downloadable zip for `win-x64`, `osx-arm64`, `osx-x64` or `linux-x64` in `dist-packages/`. See [docs/releasing.md](docs/releasing.md). |
 | `npm --prefix web run test:e2e` | Browser checks against your real install. Opt-in: run `npx --prefix web playwright install chromium` once, then set `ALTROBE_E2E=1`. Without it they skip. |
 
 `ALTROBE_WOW_PATH`, `ALTROBE_PORT`, `ALTROBE_CACHE_DIR` and `ALTROBE_NO_BROWSER=1` work with
