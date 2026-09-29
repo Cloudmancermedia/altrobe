@@ -15,12 +15,30 @@ public static class AtomicFile
                 f.Write(bytes);
                 f.Flush(flushToDisk: true);
             }
-            File.Move(temp, path, overwrite: true);
+            MoveIntoPlace(temp, path);
         }
         catch
         {
             TryDelete(temp);
             throw;
+        }
+    }
+
+    // On Windows, replacing a file fails with a sharing violation while another writer is replacing
+    // it or a scanner has it open. Those locks are brief, so retry before giving up.
+    static void MoveIntoPlace(string temp, string path)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                File.Move(temp, path, overwrite: true);
+                return;
+            }
+            catch (Exception e) when (attempt < 20 && e is IOException or UnauthorizedAccessException)
+            {
+                Thread.Sleep(10 * attempt);
+            }
         }
     }
 
