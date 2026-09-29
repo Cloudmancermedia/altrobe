@@ -13,6 +13,12 @@ describe('searchText', () => {
     expect(searchText('19019')).toBe('19019')
   })
 
+  test('a slot or quality filter alone still browses', () => {
+    expect(searchText('', { slot: 'head' })).toBe('')
+    expect(searchText(' ', { quality: '4' })).toBe('')
+    expect(searchText('', { slot: '', quality: '' })).toBeNull()
+  })
+
   test('the hint tells the user what to type', () => {
     expect(SEARCH_HINT).toBe('Type an item name or ID to search')
   })

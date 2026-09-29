@@ -14,7 +14,9 @@ public sealed class AssetCache(string root)
     // `produce` returns one byte array per output, in the same order.
     public Task<string[]> GetOrCreateAsync(string key, IReadOnlyList<string> outputs, Func<byte[][]> produce)
     {
-        var paths = outputs.Select(o => Path.Combine(Root, o)).ToArray();
+        // Callers name outputs with '/', e.g. "models/1.glb"; build the path from segments so Windows
+        // gets one separator style and the returned paths compare equal to Path.Combine results.
+        var paths = outputs.Select(o => Path.Combine([Root, .. o.Split('/')])).ToArray();
         if (paths.All(File.Exists)) return Task.FromResult(paths);
 
         var lazy = _inFlight.GetOrAdd(key, _ => new Lazy<Task<string[]>>(() => Task.Run(() => Produce(paths, produce))));

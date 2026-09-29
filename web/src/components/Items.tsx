@@ -27,7 +27,7 @@ export function ItemSearch({ build }: { build: string }) {
   const [more, setMore] = useState(false)
   const [offset, setOffset] = useState(0)
 
-  const text = searchText(q)
+  const text = searchText(q, { slot, quality })
 
   useEffect(() => {
     if (text === null) return

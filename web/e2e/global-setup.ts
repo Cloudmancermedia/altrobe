@@ -6,7 +6,7 @@ import { createWriteStream } from 'node:fs'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { createServer as netServer } from 'node:net'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createServer } from 'vite'
 import { enabled, wowPath } from './env'
@@ -67,7 +67,9 @@ export default async function globalSetup() {
 
   try {
     const status = await waitForStatus(`${api}/api/v1/status`, server)
-    const installs = status.installs.filter((i) => !process.env.ALTROBE_WOW_PATH || i.path === wowPath)
+    // The server reports full paths without a trailing separator; normalize ALTROBE_WOW_PATH the same way.
+    const norm = (p: string) => resolve(p).replace(/[\\/]+$/, '')
+    const installs = status.installs.filter((i) => !process.env.ALTROBE_WOW_PATH || norm(i.path) === norm(wowPath!))
     const pick = installs.flatMap((i) => i.products.filter((p) => p.isForever).map((p) => ({ path: i.path, product: p.product })))[0]
     if (!pick) throw new Error(`no World of Warcraft: Forever product found in ${JSON.stringify(status.installs)}`)
     const r = await fetch(`${api}/api/v1/install`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(pick) })

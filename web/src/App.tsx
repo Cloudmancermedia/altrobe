@@ -50,13 +50,21 @@ export default function App() {
 
   const boot = useCallback(async (s: Status) => {
     try {
-      // With exactly one Forever product there is nothing to ask; select it and carry on.
+      store.set({ status: s })
+      // With exactly one Forever product there is nothing to ask; select it and carry on. If that
+      // fails, show the picker so the user can choose something else instead of retrying the same.
       const auto = !s.active && foreverChoice(s)
       if (auto) {
-        await selectInstall(auto)
-        s = await getStatus()
+        try {
+          await selectInstall(auto)
+          s = await getStatus()
+          store.set({ status: s })
+        } catch (e) {
+          setPhase('no-install')
+          setNotices(store, 'install', [`Could not open ${auto.product} at ${auto.path}: ${(e as Error).message}. Choose an install.`])
+          return
+        }
       }
-      store.set({ status: s })
       if (!s.active) {
         setPhase('no-install')
         setNotices(store, 'install', ['No game install selected. Choose one to load characters and items.'])

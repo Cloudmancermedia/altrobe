@@ -1,6 +1,6 @@
 // Shared helpers for the root npm scripts. Plain Node, no dependencies.
 import { spawnSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -83,8 +83,16 @@ export function run(cmd, args, options = {}) {
   if (r.status !== 0) process.exit(r.status ?? 1)
 }
 
+// npm writes node_modules/.package-lock.json on install; if the checked-in lockfile is newer, a
+// pull added or changed dependencies since the last install.
+export function webDepsStale(dir) {
+  const installed = join(dir, 'node_modules', '.package-lock.json')
+  if (!existsSync(installed)) return true
+  return statSync(join(dir, 'package-lock.json')).mtimeMs > statSync(installed).mtimeMs
+}
+
 export function ensureWebDeps() {
-  if (existsSync(join(webDir, 'node_modules'))) return
+  if (!webDepsStale(webDir)) return
   console.log('Installing web app dependencies (npm ci in web/)...')
   const [cmd, args] = npmArgs(['ci'])
   run(cmd, args, { cwd: webDir })

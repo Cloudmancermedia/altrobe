@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { gameContentProblems, hasDotnetSdk, nodeIsNewEnough, prefixLines, serverPort } from './lib.mjs'
+import { mkdtempSync, mkdirSync, utimesSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { gameContentProblems, hasDotnetSdk, nodeIsNewEnough, prefixLines, serverPort, webDepsStale } from './lib.mjs'
 
 test('node 20 or newer is accepted', () => {
   assert.equal(nodeIsNewEnough('20.0.0'), true)
@@ -40,4 +43,20 @@ test('game content: images and models only in web/public and web/src', () => {
     'docs/shot.png: .png outside web/public and web/src',
     'tools/out/a.glb: .glb outside web/public and web/src',
   ])
+})
+
+test('web dependencies are stale when missing or older than the lockfile', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'altrobe-deps-'))
+  writeFileSync(join(dir, 'package-lock.json'), '{}')
+  assert.equal(webDepsStale(dir), true, 'no node_modules')
+  mkdirSync(join(dir, 'node_modules'))
+  assert.equal(webDepsStale(dir), true, 'node_modules without an installed lockfile')
+  writeFileSync(join(dir, 'node_modules', '.package-lock.json'), '{}')
+  const old = new Date(Date.now() - 60_000), now = new Date()
+  utimesSync(join(dir, 'node_modules', '.package-lock.json'), old, old)
+  utimesSync(join(dir, 'package-lock.json'), now, now)
+  assert.equal(webDepsStale(dir), true, 'lockfile changed after the install')
+  utimesSync(join(dir, 'node_modules', '.package-lock.json'), now, now)
+  utimesSync(join(dir, 'package-lock.json'), old, old)
+  assert.equal(webDepsStale(dir), false, 'installed after the lockfile')
 })
