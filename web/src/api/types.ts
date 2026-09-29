@@ -161,6 +161,22 @@ export interface ItemSearchResult {
   /** A developer or NPC item, going by its name. Listed after the others. */
   internal?: boolean
 }
+export interface SetPiece {
+  slot: string
+  itemId: number
+  name: string
+  quality: number
+  iconFileDataId: number
+}
+export interface ItemSetResult {
+  setId: number
+  name: string
+  internal: boolean
+  /** Pieces that can be shown, each with the look slot it goes in. */
+  pieces: SetPiece[]
+  /** Pieces left out: not worn, no visual, or their slot is taken. */
+  skipped: { itemId: number; reason: string }[]
+}
 export interface ItemSearchQuery {
   q?: string
   slot?: string

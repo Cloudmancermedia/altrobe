@@ -84,3 +84,4 @@ button.link { background: none; border: none; padding: 0 2px; color: var(--muted
 
 .actions { display: flex; gap: 6px; margin-bottom: 10px; }
 .actions button { flex: 1; white-space: nowrap; }
+.find-mode { margin-bottom: 8px; }

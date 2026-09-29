@@ -120,6 +120,18 @@ test('customization choices are drawn, and the Randomize and Reset buttons chang
   expect(Object.keys(custom).length).toBeGreaterThan(0)
 })
 
+test('the Sets tab equips every piece of a set in one click', async ({ page }) => {
+  await openApp(page)
+  const panel = page.getByRole('region', { name: 'Find items' })
+  await panel.getByRole('radio', { name: 'sets' }).click()
+  await page.getByLabel('Search sets').fill('warlord')
+  const first = page.locator('.results li button').first()
+  await expect(first).toContainText('Warlord')
+  await first.click()
+  await expect(page.getByRole('region', { name: 'Equipped' }).locator('.slots li')).toHaveCount(6)
+  await settled(page, 1)
+})
+
 test('an empty search shows a hint; typing finds Thunderfury', async ({ page }) => {
   await openApp(page)
   const panel = page.getByRole('region', { name: 'Find items' })

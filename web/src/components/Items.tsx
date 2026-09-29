@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { ApiError, textureUrl } from '../api/client'
-import type { ItemSearchResult } from '../api/types'
+import { ApiError, searchSets, textureUrl } from '../api/client'
+import type { ItemSearchResult, ItemSetResult } from '../api/types'
 import { commands, store } from '../app-state'
 import { QUALITY_NAMES, SLOT_LABELS } from '../labels'
 import type { Look } from '../look/look'
@@ -18,7 +18,73 @@ export function ItemIcon({ build, fileDataId, quality }: { build: string; fileDa
   return <img className={cls} src={textureUrl(build, fileDataId)} alt="" width={32} height={32} loading="lazy" onError={() => setFailed(true)} />
 }
 
+/** The Find panel: single items, or whole sets. */
 export function ItemSearch({ build }: { build: string }) {
+  const [mode, setMode] = useState<'items' | 'sets'>('items')
+  return (
+    <section className="panel search" aria-labelledby="search-heading">
+      <h2 id="search-heading">Find {mode}</h2>
+      <div className="segmented find-mode" role="radiogroup" aria-label="Find">
+        {(['items', 'sets'] as const).map((m) => (
+          <button key={m} type="button" role="radio" aria-checked={mode === m} onClick={() => setMode(m)}>{m}</button>
+        ))}
+      </div>
+      {mode === 'items' ? <SingleItemSearch build={build} /> : <SetSearch build={build} />}
+    </section>
+  )
+}
+
+function SetSearch({ build }: { build: string }) {
+  const [q, setQ] = useState('')
+  const [sets, setSets] = useState<ItemSetResult[]>([])
+  const [state, setState] = useState<'idle' | 'loading' | 'error'>('idle')
+  useEffect(() => {
+    const ctrl = new AbortController()
+    const t = setTimeout(() => {
+      setState('loading')
+      searchSets({ q: q.trim(), limit: 30 }, ctrl.signal).then((r) => {
+        if (ctrl.signal.aborted) return
+        setSets(r)
+        setState('idle')
+      }, (e) => {
+        if (ctrl.signal.aborted) return
+        setState('error')
+        setNotices(store, 'search', [`set search failed: ${e instanceof ApiError ? e.message : String(e)}`])
+      })
+    }, 250)
+    return () => { clearTimeout(t); ctrl.abort() }
+  }, [q])
+
+  const equip = (s: ItemSetResult) => {
+    rememberItems(store, s.pieces.map((p) => ({ itemId: p.itemId, name: p.name, slot: p.slot, quality: p.quality, iconFileDataId: p.iconFileDataId })))
+    commands.equip_items(s.pieces.map((p) => ({ slot: p.slot, itemId: p.itemId })))
+  }
+  const quality = (s: ItemSetResult) => Math.max(...s.pieces.map((p) => p.quality))
+  return (
+    <>
+      <div className="search-controls">
+        <input type="search" placeholder="Set name, piece name or set ID" aria-label="Search sets" value={q} onChange={(e) => setQ(e.target.value)} />
+      </div>
+      <ul className="results" aria-live="polite" aria-busy={state === 'loading'}>
+        {sets.map((s) => (
+          <li key={s.setId}>
+            <button type="button" className="result" onClick={() => equip(s)} title={s.pieces.map((p) => p.name).join('\n')}>
+              <ItemIcon build={build} fileDataId={s.pieces[0]?.iconFileDataId} quality={quality(s)} />
+              <span className="result-text">
+                <span className={`qname q${quality(s)}`}>{s.name}</span>
+                <span className="muted small">{s.pieces.length} pieces · set {s.setId}{s.internal ? ' · dev set' : ''}</span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {state === 'idle' && sets.length === 0 && <p className="muted small">No sets match.</p>}
+      {state === 'loading' && <p className="muted small">Searching…</p>}
+    </>
+  )
+}
+
+function SingleItemSearch({ build }: { build: string }) {
   const [q, setQ] = useState('')
   const [slot, setSlot] = useState('')
   const [quality, setQuality] = useState('')
@@ -56,8 +122,7 @@ export function ItemSearch({ build }: { build: string }) {
   const reset = <T,>(set: (v: T) => void) => (v: T) => { setOffset(0); set(v) }
 
   return (
-    <section className="panel search" aria-labelledby="search-heading">
-      <h2 id="search-heading">Find items</h2>
+    <>
       <div className="search-controls">
         <input type="search" placeholder="Search by name or ID" aria-label="Search items by name or ID" value={q} onChange={(e) => reset(setQ)(e.target.value)} />
         <select aria-label="Slot" value={slot} onChange={(e) => reset(setSlot)(e.target.value)}>
@@ -87,7 +152,7 @@ export function ItemSearch({ build }: { build: string }) {
       {text !== null && state === 'idle' && results.length === 0 && <p className="muted small">No items match.</p>}
       {busy && <p className="muted small">Searching…</p>}
       {text !== null && more && !busy && <button type="button" onClick={() => setOffset(offset + PAGE)}>Show more</button>}
-    </section>
+    </>
   )
 }
 
