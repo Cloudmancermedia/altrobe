@@ -17,7 +17,11 @@ builder.Services.AddSingleton<IBuildSessionFactory, LocalBuildSessions>();
 builder.Services.AddSingleton<IBrowserLauncher, SystemBrowser>();
 builder.Services.AddSingleton<TabSession>();
 // MCP for Claude Code and other clients, at /mcp. Stateless: each request stands alone.
-builder.Services.AddMcpServer(o => o.ServerInfo = new() { Name = "altrobe", Version = Api.AppVersion })
+builder.Services.AddMcpServer(o =>
+    {
+        o.ServerInfo = new() { Name = "altrobe", Version = Api.AppVersion };
+        o.ServerInstructions = McpTools.Instructions;
+    })
     .WithHttpTransport(o => o.Stateless = true)
     .WithTools<McpTools>();
 

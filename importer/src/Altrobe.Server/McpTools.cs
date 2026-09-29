@@ -15,6 +15,20 @@ public sealed class McpTools(AppState state, TabSession tab)
 {
     static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
+    // Sent once when a client connects; Claude Code puts it in the system prompt.
+    public const string Instructions = """
+        Altrobe is a 3D dressing room for World of Warcraft: Forever, running on this computer and open in
+        the user's browser. Use these tools whenever the user wants to dress, gear, transmog or customize a
+        WoW character, try items or outfits, or compare how a look shows on different races.
+
+        - Always find items with search_items, then equip them by the returned itemId. Never guess item IDs.
+        - Race IDs come from list_characters. Customization option and choice IDs come from get_look.
+        - compare shows the main character's outfit on up to 3 more characters; they all wear the same items.
+        - The catalog holds each item's name, slot and quality. It does not know where an item drops, which
+          quest gives it, or its level. If you choose items from your own knowledge of the game, say so.
+        - Look changes need an open Altrobe tab. If a tool says none is open, ask the user to open Altrobe.
+        """;
+
     const string Slots = "head, neck, shoulder, shirt, chest, waist, legs, feet, wrist, hands, back, mainhand, offhand, tabard";
 
     Altrobe.Core.Builds.BuildSession Session => state.Current?.Session
@@ -34,7 +48,7 @@ public sealed class McpTools(AppState state, TabSession tab)
     }
 
     [McpServerTool(Name = "search_items", ReadOnly = true)]
-    [Description("Search the item catalog by name or item ID. Only items with a visual are listed. Use the returned itemId with equip_item; never guess IDs.")]
+    [Description("World of Warcraft: Forever dressing room (Altrobe). Search the item catalog by name or item ID. Only items with a visual are listed. Use the returned itemId with equip_item; never guess IDs.")]
     public string SearchItems(
         [Description("Part of the item name, or an item ID. Leave empty to browse by slot or quality.")] string? query = null,
         [Description($"Look slot to filter by: {Slots}")] string? slot = null,
@@ -47,7 +61,7 @@ public sealed class McpTools(AppState state, TabSession tab)
     }
 
     [McpServerTool(Name = "list_characters", ReadOnly = true)]
-    [Description("The playable races, which sexes each has, whether each has HD and SD models, and its classes.")]
+    [Description("World of Warcraft: Forever dressing room (Altrobe). The playable races, which sexes each has, whether each has HD and SD models, and its classes.")]
     public string ListCharacters() => JsonSerializer.Serialize(Session.Characters.Races().Select(r => new
     {
         r.Race, r.Name,
@@ -56,11 +70,11 @@ public sealed class McpTools(AppState state, TabSession tab)
     }), Json);
 
     [McpServerTool(Name = "get_look", ReadOnly = true)]
-    [Description("The look shown in the Altrobe tab: character, equipped items with names, customization choices, characters shown side by side, and any notices. Includes every customization option and its choices, for set_customization.")]
+    [Description("World of Warcraft: Forever dressing room (Altrobe). The look shown in the Altrobe tab: character, equipped items with names, customization choices, characters shown side by side, and any notices. Includes every customization option and its choices, for set_customization.")]
     public Task<string> GetLook(CancellationToken ct) => Tab("get_look", [], ct);
 
     [McpServerTool(Name = "equip_item")]
-    [Description("Put an item in a slot. Find the itemId with search_items first.")]
+    [Description("World of Warcraft: Forever dressing room (Altrobe). Put an item in a slot. Find the itemId with search_items first.")]
     public Task<string> EquipItem([Description($"Look slot: {Slots}")] string slot, [Description("Item ID from search_items")] int itemId, CancellationToken ct)
     {
         var item = Session.Items.Get(itemId) ?? throw new McpException($"Item {itemId} is not in the catalog, or has no visual. Use search_items to find an item ID.");
@@ -70,44 +84,44 @@ public sealed class McpTools(AppState state, TabSession tab)
     }
 
     [McpServerTool(Name = "unequip")]
-    [Description("Clear a slot.")]
+    [Description("World of Warcraft: Forever dressing room (Altrobe). Clear a slot.")]
     public Task<string> Unequip([Description($"Look slot: {Slots}")] string slot, CancellationToken ct) => Tab("unequip", new() { ["slot"] = slot }, ct);
 
     [McpServerTool(Name = "set_character")]
-    [Description("Change the main character's race, sex and models. Race IDs come from list_characters. This resets customization choices.")]
+    [Description("World of Warcraft: Forever dressing room (Altrobe). Change the main character's race, sex and models. Race IDs come from list_characters. This resets customization choices.")]
     public Task<string> SetCharacter([Description("Race ID")] int race, [Description("0 male, 1 female")] int sex,
         [Description("hd or sd; leave out to keep the current one")] string? models, CancellationToken ct) =>
         Tab("set_character", new() { ["race"] = race, ["sex"] = sex, ["models"] = models }, ct);
 
     [McpServerTool(Name = "set_customization")]
-    [Description("Pick a customization choice (skin color, face, hair style and so on) for the main character. Option and choice IDs come from get_look.")]
+    [Description("World of Warcraft: Forever dressing room (Altrobe). Pick a customization choice (skin color, face, hair style and so on) for the main character. Option and choice IDs come from get_look.")]
     public Task<string> SetCustomization([Description("Option ID")] int optionId, [Description("Choice ID")] int choiceId, CancellationToken ct) =>
         Tab("set_customization", new() { ["optionId"] = optionId, ["choiceId"] = choiceId }, ct);
 
     [McpServerTool(Name = "randomize_customization")]
-    [Description("Pick a random choice for every customization option of the main character.")]
+    [Description("World of Warcraft: Forever dressing room (Altrobe). Pick a random choice for every customization option of the main character.")]
     public Task<string> RandomizeCustomization(CancellationToken ct) => Tab("randomize_customization", [], ct);
 
     [McpServerTool(Name = "reset_customization")]
-    [Description("Set every customization option back to its default.")]
+    [Description("World of Warcraft: Forever dressing room (Altrobe). Set every customization option back to its default.")]
     public Task<string> ResetCustomization(CancellationToken ct) => Tab("reset_customization", [], ct);
 
     [McpServerTool(Name = "compare")]
-    [Description("Show the current outfit on up to 3 more characters side by side. Pass an empty list to show only the main character.")]
+    [Description("World of Warcraft: Forever dressing room (Altrobe). Show the current outfit on up to 3 more characters side by side. Pass an empty list to show only the main character.")]
     public Task<string> Compare([Description("Characters: race ID, sex (0 male, 1 female), models (hd or sd, default hd)")] CompareCharacter[] characters, CancellationToken ct) =>
         Tab("compare", new() { ["characters"] = JsonSerializer.SerializeToNode(characters, Json) }, ct);
 
     [McpServerTool(Name = "set_visibility")]
-    [Description("Hide or show an equipped item without removing it, such as the helm or cloak.")]
+    [Description("World of Warcraft: Forever dressing room (Altrobe). Hide or show an equipped item without removing it, such as the helm or cloak.")]
     public Task<string> SetVisibility([Description($"Look slot: {Slots}")] string slot, [Description("false hides the item")] bool visible, CancellationToken ct) =>
         Tab("set_visibility", new() { ["slot"] = slot, ["visible"] = visible }, ct);
 
     [McpServerTool(Name = "set_view")]
-    [Description("Turn the camera: front, side, back or head.")]
+    [Description("World of Warcraft: Forever dressing room (Altrobe). Turn the camera: front, side, back or head.")]
     public Task<string> SetView([Description("front, side, back or head")] string view, CancellationToken ct) => Tab("set_view", new() { ["view"] = view }, ct);
 
     [McpServerTool(Name = "share_link", ReadOnly = true)]
-    [Description("A link that opens the current look in Altrobe on any computer with Altrobe installed.")]
+    [Description("World of Warcraft: Forever dressing room (Altrobe). A link that opens the current look in Altrobe on any computer with Altrobe installed.")]
     public Task<string> ShareLink(CancellationToken ct) => Tab("share_link", [], ct);
 
     public sealed record CompareCharacter(int Race, int Sex, string? Models);

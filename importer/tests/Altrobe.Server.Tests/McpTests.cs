@@ -59,6 +59,17 @@ public class McpTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task TellsTheModelWhatAltrobeIsAndWhenToUseIt()
+    {
+        var client = await Client();
+        Assert.Contains("World of Warcraft: Forever", client.ServerInstructions);
+        Assert.Contains("Never guess item IDs", client.ServerInstructions);
+        // Tool lists can be loaded by name and first line only, so each description names the game.
+        foreach (var t in await client.ListToolsAsync(cancellationToken: Ct))
+            Assert.StartsWith("World of Warcraft: Forever", t.Description);
+    }
+
+    [Fact]
     public async Task SearchWorksWithoutAnOpenTab()
     {
         var r = await (await Client()).CallToolAsync("search_items", new Dictionary<string, object?> { ["query"] = "robe", ["slot"] = "chest" }, cancellationToken: Ct);
