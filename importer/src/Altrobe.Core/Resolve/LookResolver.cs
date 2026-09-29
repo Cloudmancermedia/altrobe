@@ -14,6 +14,7 @@
 // - Choices are filtered by ChrCustomizationReq for a fresh non-Death-Knight character.
 // - Every element of a choice counts, not only the last one read.
 // - Ears default to 702, not 701 (701 renders the Orc without ears).
+// - An SD option takes the HD model's default choice when option and choice names match.
 
 using System.Text.Json.Serialization;
 using Altrobe.Core.Catalog;
@@ -173,16 +174,24 @@ public sealed class LookResolver
         var meshSet = mesh.ToHashSet();
         var notes = new List<string>();
 
-        // 1. Default choice per option: first eligible choice by OrderIndex, then ID.
-        var options = _optionsByModel.Of(chrModelId).OrderBy(o => o.Int("OrderIndex")).ToList();
-        var picks = new List<(Row option, Row? choice, string? optFail, List<(Row choice, string? fail)> all)>();
-        foreach (var opt in options)
+        // 1. Default choice per option: first eligible choice by OrderIndex, then ID. An SD option
+        // takes the HD model's default instead when the option name and the choice name each match
+        // exactly once: the SD Undead "Eye Glow" lists None first, while HD defaults to Glow.
+        var picks = Picks(chrModelId, classId);
+        if (chrModelId != hdChrModelId)
         {
-            var optFail = ReqFailure(opt.Int("Requirement"), classId);
-            var all = _choicesByOption.Of(opt.Int("ID")).OrderBy(c => c.Int("OrderIndex")).ThenBy(c => c.Int("ID"))
-                .Select(c => (choice: c, fail: ReqFailure(c.Int("ChrCustomizationReqID"), classId))).ToList();
-            var pick = optFail != null ? null : all.FirstOrDefault(c => c.fail == null).choice;
-            picks.Add((opt, pick, optFail, all));
+            var hdPicks = Picks(hdChrModelId, classId);
+            for (var i = 0; i < picks.Count; i++)
+            {
+                var p = picks[i];
+                if (p.optFail != null) continue;
+                var name = p.option.Str("Name_lang");
+                var hd = hdPicks.Where(h => h.option.Str("Name_lang") == name).ToList();
+                var hdChoice = hd.Count == 1 ? hd[0].choice?.Str("Name_lang") : null;
+                if (string.IsNullOrEmpty(hdChoice)) continue;
+                var same = p.all.Where(c => c.fail == null && c.choice.Str("Name_lang") == hdChoice).ToList();
+                if (same.Count == 1) picks[i] = p with { choice = same[0].choice };
+            }
         }
         var active = picks.Where(p => p.choice != null).Select(p => (optionId: p.option.Int("ID"), choice: p.choice!)).ToList();
         var activeIds = active.Select(a => a.choice.Int("ID")).ToHashSet();
@@ -295,6 +304,20 @@ public sealed class LookResolver
             UnsupportedElements = unsupported,
             Notes = notes,
         };
+    }
+
+    List<(Row option, Row? choice, string? optFail, List<(Row choice, string? fail)> all)> Picks(int chrModelId, int classId)
+    {
+        var picks = new List<(Row option, Row? choice, string? optFail, List<(Row choice, string? fail)> all)>();
+        foreach (var opt in _optionsByModel.Of(chrModelId).OrderBy(o => o.Int("OrderIndex")))
+        {
+            var optFail = ReqFailure(opt.Int("Requirement"), classId);
+            var all = _choicesByOption.Of(opt.Int("ID")).OrderBy(c => c.Int("OrderIndex")).ThenBy(c => c.Int("ID"))
+                .Select(c => (choice: c, fail: ReqFailure(c.Int("ChrCustomizationReqID"), classId))).ToList();
+            var pick = optFail != null ? null : all.FirstOrDefault(c => c.fail == null).choice;
+            picks.Add((opt, pick, optFail, all));
+        }
+        return picks;
     }
 
     // SwatchColor[0] is 0xAARRGGBB; 0 means the choice has no swatch.

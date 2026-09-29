@@ -107,8 +107,8 @@ public class LookResolverTests
     static void Option(InMemoryTables t, int id, string name, int model, int order, int flags = 0, int req = 0) =>
         t.Add(GameTableNames.ChrCustomizationOption, R(("ID", id), ("Name_lang", name), ("ChrModelID", model), ("OrderIndex", order), ("Flags", flags), ("Requirement", req)));
 
-    static void Choice(InMemoryTables t, int id, int option, int order, int req = 0) =>
-        t.Add(GameTableNames.ChrCustomizationChoice, R(("ID", id), ("Name_lang", ""), ("ChrCustomizationOptionID", option), ("OrderIndex", order), ("ChrCustomizationReqID", req)));
+    static void Choice(InMemoryTables t, int id, int option, int order, int req = 0, string name = "") =>
+        t.Add(GameTableNames.ChrCustomizationChoice, R(("ID", id), ("Name_lang", name), ("ChrCustomizationOptionID", option), ("OrderIndex", order), ("ChrCustomizationReqID", req)));
 
     static void Material(InMemoryTables t, int element, int choice, int material, int target, int res, int related = 0)
     {
@@ -171,6 +171,26 @@ public class LookResolverTests
         // option 30, whose chosen choice turns on both 1302 and 2001. 200 (jaw) is not in the mesh.
         Assert.Equal([0, 401, 501, 702, 1302, 2001, 3201], look.Geosets);
         Assert.Contains(look.Notes, n => n.Contains("200"));
+    }
+
+    [Fact]
+    public void SdDefaultsFollowTheHdDefaultByOptionAndChoiceName()
+    {
+        // The SD Undead "Eye Glow" option lists None first, but HD's default is Glow. An SD option
+        // takes the HD default when both option and choice names match exactly once.
+        var t = Tables();
+        Option(t, 60, "Eye Glow", HdModel, order: 6);
+        Choice(t, 600, 60, order: 0, name: "Glow");
+        Choice(t, 601, 60, order: 8, name: "None");
+        Option(t, 9481, "Eye Glow", SdModel, order: 1);
+        Choice(t, 78855, 9481, order: 0, name: "None");
+        Choice(t, 78856, 9481, order: 1, name: "Glow");
+        var sd = new LookResolver(t).Resolve(Orc, Male, Warrior, ModelSet.Sd, _ => SdMesh)!;
+
+        Assert.Equal(78856, sd.Options.Single(o => o.OptionId == 9481).DefaultChoiceId);
+        Assert.Equal(78856, sd.Choices.Single(c => c.OptionId == 9481).ChoiceId);
+        // Unnamed choices have nothing to match, so the SD skin keeps its own first choice.
+        Assert.Equal(77751, sd.Options.Single(o => o.OptionId == 9417).DefaultChoiceId);
     }
 
     [Fact]
