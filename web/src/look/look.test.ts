@@ -153,11 +153,33 @@ describe('compare (side by side) addition', () => {
     expect(JSON.parse(canonicalJSON(norm(outfitA))).compare).toBeUndefined()
   })
 
-  test('drops bad entries and anything past three, with notices', () => {
-    const r = normalizeLook({ ...outfitA, compare: [{ race: 5, sex: 1 }, { race: 'x', sex: 0 }, { race: 1, sex: 0, models: 'ultra' }, { race: 3, sex: 0 }, { race: 4, sex: 1 }] })
-    expect(r.look!.compare).toEqual([{ race: 5, sex: 1, models: 'hd' }, { race: 1, sex: 0, models: 'hd' }, { race: 3, sex: 0, models: 'hd' }])
+  test('drops bad entries and anything past five, with notices', () => {
+    const r = normalizeLook({ ...outfitA, compare: [{ race: 5, sex: 1 }, { race: 'x', sex: 0 }, { race: 1, sex: 0, models: 'ultra' }, { race: 3, sex: 0 }, { race: 4, sex: 1 }, { race: 6, sex: 0 }, { race: 7, sex: 0 }, { race: 8, sex: 0 }] })
+    expect(r.look!.compare.map((c) => c.race)).toEqual([5, 1, 3, 4, 6])
     expect(r.notices).toHaveLength(3)
     expect(normalizeLook({ ...outfitA, compare: 'no' }).notices).toEqual(['dropped "compare": not a list'])
+  })
+
+  test('an entry can wear its own outfit, customizations and label', () => {
+    const own = { race: 2, sex: 0, models: 'hd', label: 'Level 30', items: { chest: 4071, ring: 5 }, hide: ['chest'], custom: { 20: 390 } }
+    const r = normalizeLook({ ...outfitA, compare: [own, { race: 5, sex: 1, items: {} }] })
+    expect(r.look!.compare).toEqual([
+      { race: 2, sex: 0, models: 'hd', label: 'Level 30', items: { chest: 4071 }, hide: ['chest'], custom: { 20: 390 } },
+      // An empty "items" is its own (empty) outfit, not the main one.
+      { race: 5, sex: 1, models: 'hd', items: {} },
+    ])
+    expect(r.notices).toEqual(['dropped item in unknown slot "ring"'])
+    const look = r.look!
+    expect(decodeLook(encodeLook(look)).look).toEqual(look)
+    expect(JSON.parse(canonicalJSON(look)).compare).toEqual([
+      { custom: { 20: 390 }, hide: ['chest'], items: { chest: 4071 }, label: 'Level 30', models: 'hd', race: 2, sex: 0 },
+      { items: {}, models: 'hd', race: 5, sex: 1 },
+    ])
+  })
+
+  test('labels are trimmed to 40 characters and blank ones dropped', () => {
+    const r = normalizeLook({ ...outfitA, compare: [{ race: 2, sex: 0, label: '  ' + 'x'.repeat(50) }, { race: 2, sex: 0, label: '   ' }, { race: 2, sex: 0, label: 7 }] })
+    expect(r.look!.compare.map((c) => c.label)).toEqual(['x'.repeat(40), undefined, undefined])
   })
 
   test('a look without compare reads the same as before the addition', () => {

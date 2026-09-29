@@ -40,6 +40,17 @@ describe('transitions', () => {
     expect(transitions.equipItem(bare, 'head', 1.5).error).toMatch(/not an item ID/)
   })
 
+  test('compare characters can carry their own outfit and label', () => {
+    const r = transitions.compare(bare, [{ race: 2, sex: 0, label: 'Level 30', items: { chest: 4071 }, custom: { 20: 390 } }], characters).look!
+    expect(r.compare).toEqual([{ race: 2, sex: 0, models: 'hd', label: 'Level 30', items: { chest: 4071 }, custom: { 20: 390 } }])
+    expect(transitions.compare(bare, [{ race: 2, sex: 0, items: { ring: 1 } }]).error).toMatch(/unknown slot "ring"/)
+    expect(transitions.compare(bare, [{ race: 2, sex: 0, items: { chest: -1 } }]).error).toMatch(/not an item ID/)
+    // Back to the main outfit.
+    const main = transitions.wearMainOutfit(r, 0).look!
+    expect(main.compare).toEqual([{ race: 2, sex: 0, models: 'hd', label: 'Level 30', custom: { 20: 390 } }])
+    expect(transitions.wearMainOutfit(r, 3).error).toMatch(/no side-by-side character 4/)
+  })
+
   test('set_visibility toggles without duplicates', () => {
     let l = transitions.setVisibility(bare, 'back', false).look!
     l = transitions.setVisibility(l, 'back', false).look!
@@ -88,11 +99,11 @@ describe('transitions', () => {
     expect(transitions.resetCustomization(r).look!.custom).toEqual({})
   })
 
-  test('compare sets up to three extra characters, in order', () => {
+  test('compare sets up to five extra characters, in order', () => {
     const r = transitions.compare(bare, [{ race: 5, sex: 1, models: 'sd' }, { race: 2, sex: 1 }], characters).look!
     expect(r.compare).toEqual([{ race: 5, sex: 1, models: 'sd' }, { race: 2, sex: 1, models: 'hd' }])
-    const four = Array.from({ length: 4 }, () => ({ race: 2, sex: 0 }))
-    expect(transitions.compare(bare, four).error).toMatch(/at most 4/)
+    const six = Array.from({ length: 6 }, () => ({ race: 2, sex: 0 }))
+    expect(transitions.compare(bare, six).error).toMatch(/at most 6/)
     expect(transitions.compare(bare, [{ race: 2, sex: 1, models: 'sd' }], characters).error).toMatch(/no SD model/)
     expect(transitions.compare(r, []).look!.compare).toEqual([])
   })

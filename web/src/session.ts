@@ -3,9 +3,9 @@
 // from Claude updates the 3D view live. See importer/src/Altrobe.Server/TabSession.cs.
 
 import type { ModelSet } from './api/types'
-import type { Commands } from './commands'
+import type { CompareInput, Commands } from './commands'
 import { characterLabel } from './labels'
-import type { View } from './look/look'
+import type { Look, View } from './look/look'
 import { setNotices, type AppState, type Store } from './store'
 
 /** Close code the server uses when a newer tab takes over (TabSession.Replaced). */
@@ -17,13 +17,19 @@ export interface RemoteReply { ok: boolean; result?: unknown; error?: string }
 export function describeLook(s: AppState, full = true) {
   const { look } = s
   const choiceName = (name: string, i: number) => name || `#${i + 1}`
+  const named = (items: Look['items']) =>
+    Object.fromEntries(Object.entries(items).map(([slot, id]) => [slot, { itemId: id, name: s.itemInfo[id as number]?.name ?? null }]))
   return {
     character: characterLabel(s.characters, look.race, look.sex, look.models),
     race: look.race, sex: look.sex, models: look.models,
-    items: Object.fromEntries(Object.entries(look.items).map(([slot, id]) => [slot, { itemId: id, name: s.itemInfo[id as number]?.name ?? null }])),
+    items: named(look.items),
     hidden: look.hide,
     view: look.cam.view,
-    compare: look.compare.map((c) => characterLabel(s.characters, c.race, c.sex, c.models)),
+    compare: look.compare.map((c) => ({
+      character: characterLabel(s.characters, c.race, c.sex, c.models),
+      ...(c.label ? { label: c.label } : {}),
+      ...(c.items ? { items: named(c.items), ...(c.hide?.length ? { hidden: c.hide } : {}) } : { wears: 'main outfit' }),
+    })),
     customization: s.options.map((o) => {
       const current = look.custom[String(o.optionId)] ?? o.defaultChoiceId
       const choices = o.choices.map((c, i) => ({ choiceId: c.choiceId, name: choiceName(c.name, i) }))
@@ -48,7 +54,8 @@ export async function runRemoteCommand(cmd: Commands, store: Store<AppState>, co
     set_customization: () => cmd.set_customization(num(args, 'optionId'), num(args, 'choiceId')),
     randomize_customization: () => cmd.randomize_customization(),
     reset_customization: () => cmd.reset_customization(),
-    compare: () => cmd.compare((args.characters ?? []) as { race: number; sex: number; models?: ModelSet }[]),
+    compare: () => cmd.compare((args.characters ?? []) as CompareInput[]),
+    wear_main_outfit: () => cmd.wear_main_outfit(num(args, 'index')),
     set_visibility: () => cmd.set_visibility(str(args, 'slot'), args.visible as boolean),
     set_view: () => cmd.set_view(str(args, 'view') as View),
   }

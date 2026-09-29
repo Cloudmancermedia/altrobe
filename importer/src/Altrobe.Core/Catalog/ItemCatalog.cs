@@ -103,6 +103,9 @@ public sealed class ItemCatalog
 
     public int Count => _items.Count;
 
+    // Every item, in search order.
+    public IReadOnlyList<ItemSummary> All => _items;
+
     // Null when the item has no visual or no name.
     public ItemSummary? Get(int itemId) => _byId.GetValueOrDefault(itemId);
 

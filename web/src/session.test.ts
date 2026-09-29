@@ -59,6 +59,16 @@ describe('runRemoteCommand', () => {
     expect(await run('delete_everything')).toEqual({ ok: false, error: 'unknown command "delete_everything"' })
   })
 
+  test('get_look describes each side-by-side character and its own outfit', async () => {
+    const { run } = setup()
+    await run('compare', { characters: [{ race: 5, sex: 1, label: 'Level 30', items: { mainhand: 19019 } }, { race: 2, sex: 0 }] })
+    const r = await run('get_look')
+    expect((r.result as { compare: unknown[] }).compare).toEqual([
+      { character: 'Undead female HD', label: 'Level 30', items: { mainhand: { itemId: 19019, name: 'Thunderfury' } } },
+      { character: 'Orc male HD', wears: 'main outfit' },
+    ])
+  })
+
   test('share_link returns a link', async () => {
     const { run } = setup()
     const r = await run('share_link')

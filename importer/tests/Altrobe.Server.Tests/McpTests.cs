@@ -53,8 +53,8 @@ public class McpTests : IAsyncLifetime
     {
         var tools = await (await Client()).ListToolsAsync(cancellationToken: Ct);
         var names = tools.Select(t => t.Name).ToHashSet();
-        foreach (var n in new[] { "search_items", "search_sets", "equip_set", "list_characters", "get_look", "equip_item", "unequip", "set_character", "set_customization",
-                     "randomize_customization", "reset_customization", "compare", "set_visibility", "set_view", "share_link" })
+        foreach (var n in new[] { "search_items", "search_sets", "equip_set", "build_outfit", "list_characters", "get_look", "equip_item", "unequip", "set_character", "set_customization",
+                     "randomize_customization", "reset_customization", "compare", "wear_main_outfit", "set_visibility", "set_view", "share_link" })
             Assert.Contains(n, names);
     }
 
@@ -113,6 +113,17 @@ public class McpTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task BuildOutfitFillsSlotsForALevelAndListsTheRest()
+    {
+        var client = await Client();
+        var r = JsonNode.Parse(Text(await client.CallToolAsync("build_outfit", new Dictionary<string, object?> { ["level"] = 32, ["armor"] = "leather", ["min_quality"] = 2, ["max_quality"] = 3 }, cancellationToken: Ct)))!;
+        Assert.Equal(7, r["items"]!["legs"]!["itemId"]!.GetValue<int>());
+        Assert.Contains("chest", r["missing"]!.AsArray().Select(m => m!.GetValue<string>()));
+        var tooLow = JsonNode.Parse(Text(await client.CallToolAsync("build_outfit", new Dictionary<string, object?> { ["level"] = 20, ["armor"] = "leather" }, cancellationToken: Ct)))!;
+        Assert.Empty(tooLow["items"]!.AsObject());
+    }
+
+    [Fact]
     public async Task LookCommandsNeedAnOpenTab()
     {
         var r = await (await Client()).CallToolAsync("get_look", cancellationToken: Ct);
@@ -165,6 +176,29 @@ public class McpTests : IAsyncLifetime
         var unknown = await client.CallToolAsync("equip_set", new Dictionary<string, object?> { ["setId"] = 999 }, cancellationToken: Ct);
         Assert.True(unknown.IsError);
         Assert.Single(seen);
+    }
+
+    [Fact]
+    public async Task CompareCarriesOwnOutfitsCheckedAgainstTheCatalog()
+    {
+        var seen = new List<JsonObject>();
+        using var tab = await Tab(msg => { seen.Add(msg); return new JsonObject { ["ok"] = true, ["result"] = new JsonObject() }; });
+        var client = await Client();
+        var chars = new[] { new Dictionary<string, object?> { ["race"] = 2, ["sex"] = 0, ["label"] = "Level 30", ["items"] = new Dictionary<string, int> { ["legs"] = 7 } } };
+        var ok = await client.CallToolAsync("compare", new Dictionary<string, object?> { ["characters"] = chars }, cancellationToken: Ct);
+        Assert.NotEqual(true, ok.IsError);
+        var sent = Assert.Single(seen)["args"]!["characters"]![0]!;
+        Assert.Equal(("Level 30", 7), (sent["label"]!.GetValue<string>(), sent["items"]!["legs"]!.GetValue<int>()));
+
+        // A made-up item, or one in the wrong slot, never reaches the tab.
+        var bad = new[] { new Dictionary<string, object?> { ["race"] = 2, ["sex"] = 0, ["items"] = new Dictionary<string, int> { ["head"] = 7 } } };
+        var r = await client.CallToolAsync("compare", new Dictionary<string, object?> { ["characters"] = bad }, cancellationToken: Ct);
+        Assert.True(r.IsError);
+        Assert.Contains("legs", Text(r));
+        Assert.Single(seen);
+
+        await client.CallToolAsync("wear_main_outfit", new Dictionary<string, object?> { ["index"] = 1 }, cancellationToken: Ct);
+        Assert.Equal(("wear_main_outfit", 0), (seen[1]["command"]!.GetValue<string>(), seen[1]["args"]!["index"]!.GetValue<int>()));
     }
 
     [Fact]

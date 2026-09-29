@@ -118,7 +118,11 @@ export default function App() {
 
   const cells: ViewerCell[] = useMemo(() => [
     { key: 'main', main: true, spec: { race: look.race, sex: look.sex, models: look.models }, label: characterLabel(characters, look.race, look.sex, look.models) },
-    ...look.compare.map((c, i) => ({ key: `compare${i}`, main: false, spec: c, label: characterLabel(characters, c.race, c.sex, c.models) })),
+    ...look.compare.map((c, i): ViewerCell => ({
+      key: `compare${i}`, main: false, spec: { race: c.race, sex: c.sex, models: c.models }, custom: c.custom,
+      outfit: c.items ? { items: c.items, hide: c.hide ?? [] } : undefined,
+      label: `${c.label ? `${c.label} · ` : ''}${characterLabel(characters, c.race, c.sex, c.models)}`,
+    })),
   ], [look.race, look.sex, look.models, look.compare, characters])
 
   // Drop notices from characters no longer on screen.

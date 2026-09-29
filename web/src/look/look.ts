@@ -6,7 +6,9 @@
 //     items: { "<slot>": itemId },          slot names from dress.ts SLOT_NAMES
 //     hide: ["head", "back"],               optional hidden slots
 //     cam: { view: "front" | "side" | "back" | "head" },
-//     compare: [{ race, sex, models }] }    optional, up to 3 more characters shown side by side
+//     compare: [{ race, sex, models,        optional, up to 5 more characters shown side by side
+//                 items?, hide?, custom?,   an own outfit; without "items" the entry wears the main one
+//                 label? }] }
 // A share link carries it in the URL fragment, which browsers never send to a server:
 //   /#look=<base64url(canonical JSON)>
 // docs/look-format.md describes the format, including the "compare" addition.
@@ -23,12 +25,20 @@ export const VIEWS = ['front', 'side', 'back', 'head'] as const
 export type View = (typeof VIEWS)[number]
 export const MODEL_SETS: readonly ModelSet[] = ['hd', 'sd']
 /** Side by side shows the main character plus up to this many more. */
-export const MAX_COMPARE = 3
+export const MAX_COMPARE = 5
+export const MAX_LABEL = 40
 
 export interface CompareCharacter {
   race: number
   sex: 0 | 1
   models: ModelSet
+  /** Shown above the character, such as "Level 30". */
+  label?: string
+  /** The character's own outfit. Without it, the character wears the main outfit (and its hidden slots). */
+  items?: Partial<Record<SlotName, number>>
+  hide?: SlotName[]
+  /** Customization choices for this character's own body model. */
+  custom?: Record<string, number>
 }
 
 export interface Look {
@@ -87,19 +97,9 @@ export function normalizeLook(input: unknown, { characters }: { characters?: Kno
   if (MODEL_SETS.includes(input.models as ModelSet)) look.models = input.models as ModelSet
   else if (input.models !== undefined) notices.push(`unknown models "${String(input.models)}"; using hd`)
 
-  for (const [k, val] of Object.entries(isPlainObject(input.custom) ? input.custom : {})) {
-    if (isIdKey(k) && isId(val)) look.custom[k] = val
-    else notices.push(`dropped customization ${k}: ${JSON.stringify(val)} (not an option ID and choice ID)`)
-  }
-  for (const [slot, id] of Object.entries(isPlainObject(input.items) ? input.items : {})) {
-    if (!isSlotName(slot)) notices.push(`dropped item in unknown slot "${slot}"`)
-    else if (!isId(id)) notices.push(`dropped ${slot}: ${JSON.stringify(id)} is not an item ID`)
-    else look.items[slot] = id
-  }
-  for (const slot of Array.isArray(input.hide) ? input.hide : []) {
-    if (typeof slot !== 'string' || !isSlotName(slot)) notices.push(`dropped hidden slot "${String(slot)}"`)
-    else if (!look.hide.includes(slot)) look.hide.push(slot)
-  }
+  look.custom = readCustom(input.custom, notices)
+  look.items = readItems(input.items, notices)
+  look.hide = readHide(input.hide, notices)
   const view = isPlainObject(input.cam) ? input.cam.view : undefined
   if (VIEWS.includes(view as View)) look.cam.view = view as View
   else if (view !== undefined) notices.push(`unknown camera view "${String(view)}"; using front`)
@@ -112,7 +112,13 @@ export function normalizeLook(input: unknown, { characters }: { characters?: Kno
       if (look.compare.length >= MAX_COMPARE) { notices.push(`dropped compare entries past ${MAX_COMPARE}`); break }
       const models = MODEL_SETS.includes(c.models as ModelSet) ? c.models as ModelSet : 'hd'
       if (c.models !== undefined && models !== c.models) notices.push(`unknown models "${String(c.models)}" in compare; using hd`)
-      look.compare.push({ race: c.race as number, sex: c.sex, models })
+      const entry: CompareCharacter = { race: c.race as number, sex: c.sex, models }
+      const label = typeof c.label === 'string' ? c.label.trim().slice(0, MAX_LABEL) : ''
+      if (label) entry.label = label
+      if (c.items !== undefined) entry.items = readItems(c.items, notices)
+      if (c.hide !== undefined) entry.hide = readHide(c.hide, notices)
+      if (c.custom !== undefined) entry.custom = readCustom(c.custom, notices)
+      look.compare.push(entry)
     }
   }
 
@@ -122,6 +128,34 @@ export function normalizeLook(input: unknown, { characters }: { characters?: Kno
     }
   }
   return { look, notices }
+}
+
+function readCustom(input: unknown, notices: string[]): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const [k, val] of Object.entries(isPlainObject(input) ? input : {})) {
+    if (isIdKey(k) && isId(val)) out[k] = val
+    else notices.push(`dropped customization ${k}: ${JSON.stringify(val)} (not an option ID and choice ID)`)
+  }
+  return out
+}
+
+function readItems(input: unknown, notices: string[]): Partial<Record<SlotName, number>> {
+  const out: Partial<Record<SlotName, number>> = {}
+  for (const [slot, id] of Object.entries(isPlainObject(input) ? input : {})) {
+    if (!isSlotName(slot)) notices.push(`dropped item in unknown slot "${slot}"`)
+    else if (!isId(id)) notices.push(`dropped ${slot}: ${JSON.stringify(id)} is not an item ID`)
+    else out[slot] = id
+  }
+  return out
+}
+
+function readHide(input: unknown, notices: string[]): SlotName[] {
+  const out: SlotName[] = []
+  for (const slot of Array.isArray(input) ? input : []) {
+    if (typeof slot !== 'string' || !isSlotName(slot)) notices.push(`dropped hidden slot "${String(slot)}"`)
+    else if (!out.includes(slot)) out.push(slot)
+  }
+  return out
 }
 
 type Json = Record<string, unknown>
@@ -141,7 +175,15 @@ export function canonicalLook(look: Look, { defaults = {} }: { defaults?: Record
   if (hide.length) out.hide = hide
   if (Object.keys(items).length) out.items = items
   // Order matters here (it is the order on screen), so the list is not sorted.
-  if (look.compare?.length) out.compare = look.compare.map((c) => ({ models: c.models, race: c.race, sex: c.sex }))
+  if (look.compare?.length) out.compare = look.compare.map((c) => {
+    const e: Json = { models: c.models, race: c.race, sex: c.sex }
+    if (c.label) e.label = c.label
+    // An own outfit is kept even when empty: it means "wears nothing", not "wears the main outfit".
+    if (c.items) e.items = sortKeys(c.items)
+    if (c.hide?.length) e.hide = [...new Set(c.hide)].sort()
+    if (c.custom && Object.keys(c.custom).length) e.custom = sortKeys(c.custom)
+    return sortKeys(e)
+  })
   return sortKeys(out)
 }
 
@@ -203,7 +245,7 @@ export function checkAgainstData(look: Look, { build, defaults, choices, resolve
   build?: string; defaults?: Record<string, number>; choices?: Record<string, number[]>; resolvedById?: Map<number, ResolvedItem | null>
 } = {}): { look: Look; notices: string[] } {
   const notices: string[] = []
-  const out: Look = { ...look, custom: { ...look.custom }, items: { ...look.items }, hide: [...look.hide], cam: { ...look.cam }, compare: [...look.compare] }
+  const out: Look = { ...look, custom: { ...look.custom }, items: { ...look.items }, hide: [...look.hide], cam: { ...look.cam }, compare: look.compare.map((c) => ({ ...c })) }
   if (build && look.build !== build) notices.push(`look was made on build ${look.build || '(unknown)'}; showing it with data from build ${build}`)
   if (defaults) for (const [opt, choice] of Object.entries(out.custom)) {
     if (!(opt in defaults)) { notices.push(`dropped customization option ${opt}: not an option for this character (${look.models})`); delete out.custom[opt] }

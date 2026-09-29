@@ -21,8 +21,8 @@ export interface Prepared {
 
 /**
  * @param look  the outfit; its race, sex and models are replaced by `spec`
- * @param main  true for the main character. Its customizations and build are checked; characters shown
- *   side by side use their defaults, since customization option IDs belong to one body model.
+ * @param look  the outfit and customizations this character wears
+ * @param main  true for the main character, whose build is checked against the data
  */
 export async function prepareCharacter(spec: CharacterSpec, look: Look, main: boolean): Promise<Prepared> {
   const baseLook = await getBaseLook(spec.race, spec.sex, spec.models)
@@ -30,7 +30,7 @@ export async function prepareCharacter(spec: CharacterSpec, look: Look, main: bo
   const resolvedList = await Promise.all(ids.map(async (id) => [id, await getResolvedItem(id, spec.race, spec.sex, spec.models)] as const))
   const resolvedById = new Map(resolvedList)
   const checked = checkAgainstData(
-    { ...look, ...spec, custom: main ? look.custom : {} },
+    { ...look, ...spec },
     { build: main ? baseLook.build : undefined, defaults: defaultsFrom(baseLook), choices: choicesFrom(baseLook), resolvedById },
   )
   const custom = customize(baseLook, checked.look.custom)

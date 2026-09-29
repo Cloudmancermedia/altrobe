@@ -76,7 +76,7 @@ claude mcp add --transport http altrobe http://127.0.0.1:5161/mcp
 Then open Altrobe in the browser and ask Claude something like "put the Orc in Thunderfury and
 show the same outfit on an Undead female".
 
-The tools are the web app's command API: `search_items`, `search_sets`, `equip_set`, `list_characters`, `get_look`,
+The tools are the web app's command API: `search_items`, `search_sets`, `equip_set`, `build_outfit`, `wear_main_outfit`, `list_characters`, `get_look`,
 `equip_item`, `unequip`, `set_character`, `set_customization`, `randomize_customization`,
 `reset_customization`, `compare`, `set_visibility`, `set_view` and `share_link`.
 
@@ -85,6 +85,10 @@ The tools are the web app's command API: `search_items`, `search_sets`, `equip_s
   cloth, leather, mail or plate, from `Item.SubclassID`) and class (`class_id`, from
   `ItemSparse.AllowableClass`), and its results carry `requiredLevel`, `itemLevel` and `armor`.
   Class does not cover armor proficiency, so a model picks the armor type itself.
+- `build_outfit` fills each armor slot and the back for a level: the item with the highest required
+  level within 7 levels below it, then the highest item level. The same request always gives the same
+  outfit. `compare` takes each extra character's own `items` and `label`, so a leveling journey is one
+  `build_outfit` call per level and one `compare` call.
   The two searches list only real items and sets; developer, test and NPC items are left out, though
   an exact item ID still finds one. The search panel in the web app lists them, last.
 - Some items have a model but no name, quality or level in the build (in the Forever beta, all of

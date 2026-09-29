@@ -29,7 +29,10 @@ public sealed class McpTools(AppState state, TabSession tab)
           (all of tier 1 and tier 2 in the beta). Show them when asked, and say the build has no name for the
           pieces rather than inventing one; the set name is real.
         - Race IDs come from list_characters. Customization option and choice IDs come from get_look.
-        - compare shows the main character's outfit on up to 3 more characters; they all wear the same items.
+        - For a leveling journey ("an Orc warrior from 10 to 60"), call build_outfit once per level, then put
+          the main character at one level and the others in compare with their own items and a label.
+        - compare shows up to 5 more characters side by side. They wear the main outfit unless you give one
+          its own items, which is how to show the same character at several levels.
         - The catalog holds each item's name, slot, quality, required level, item level and armor type, and
           search_items filters on them: for a level 30 warrior, try min_level 25, max_level 32, armor mail,
           class_id 1. It does not know where an item drops or which quest gives it. If you pick items by
@@ -47,11 +50,9 @@ public sealed class McpTools(AppState state, TabSession tab)
         JsonNode? result;
         try { result = await tab.CallAsync(command, args, ct); }
         catch (TabSession.TabException e) { throw new McpException(e.Message); }
-        // The tab learns an item's name only once it has drawn it, so fill in names it lacks.
-        if (result?["items"] is JsonObject items && state.Current?.Session is { } session)
-            foreach (var (_, entry) in items)
-                if (entry is JsonObject e && e["name"] is null && e["itemId"]?.GetValue<int>() is { } id && session.Items.Get(id) is { } item)
-                    e["name"] = item.Name;
+        // The tab learns an item's name only once it has drawn it, so fill in names it lacks, wherever
+        // an item appears (the main outfit and side-by-side outfits).
+        if (state.Current?.Session is { } session) FillNames(result, session.Items);
         return result?.ToJsonString(Json) ?? "{}";
     }
 
@@ -77,6 +78,27 @@ public sealed class McpTools(AppState state, TabSession tab)
         {
             total = page.Total,
             items = page.Items.Select(i => new { i.ItemId, i.Name, i.Slot, quality = i.Unnamed ? (int?)null : i.Quality, i.RequiredLevel, i.ItemLevel, i.Armor, i.Internal, i.Unnamed }),
+        }, Json);
+    }
+
+    [McpServerTool(Name = "build_outfit", ReadOnly = true)]
+    [Description("World of Warcraft: Forever dressing room (Altrobe). Gear for one level from the catalog: in each slot, the item with the highest required level within 7 levels below the target, then the highest item level. The same request always gives the same outfit. It returns items per slot (pass them to compare or equip_item) and the slots it could not fill. For a leveling journey, call it once per level.")]
+    public string BuildOutfit(
+        [Description("Character level, 1-60")] int level,
+        [Description("Armor type for armor slots: cloth, leather, mail or plate. Pick what the class wears at that level.")] string? armor = null,
+        [Description("Class ID (from list_characters): leave out items only other classes can use")] int? class_id = null,
+        [Description("Lowest quality: 0 poor, 1 common, 2 uncommon (green), 3 rare (blue), 4 epic")] int min_quality = 2,
+        [Description("Highest quality")] int max_quality = 5,
+        [Description("Slots to fill; default head, shoulder, chest, waist, legs, feet, wrist, hands, back")] string[]? slots = null)
+    {
+        var a = armor?.Trim().ToLowerInvariant();
+        if (a != null && !ItemCatalog.ArmorTypes.Values.Contains(a)) throw new McpException($"Unknown armor type \"{armor}\". Use cloth, leather, mail or plate.");
+        var outfit = OutfitBuilder.Build(Session.Items, new OutfitRequest(level, a, class_id, min_quality, max_quality, slots));
+        return JsonSerializer.Serialize(new
+        {
+            level,
+            items = outfit.Items.ToDictionary(kv => kv.Key, kv => new { kv.Value.ItemId, kv.Value.Name, kv.Value.RequiredLevel, kv.Value.Quality, kv.Value.Armor }),
+            missing = outfit.Missing,
         }, Json);
     }
 
@@ -123,10 +145,24 @@ public sealed class McpTools(AppState state, TabSession tab)
     [Description("World of Warcraft: Forever dressing room (Altrobe). Put an item in a slot. Find the itemId with search_items first.")]
     public Task<string> EquipItem([Description($"Look slot: {Slots}")] string slot, [Description("Item ID from search_items")] int itemId, CancellationToken ct)
     {
+        CheckItem(slot, itemId);
+        return Tab("equip_item", new() { ["slot"] = slot, ["itemId"] = itemId }, ct);
+    }
+
+    static void FillNames(JsonNode? node, ItemCatalog items)
+    {
+        if (node is JsonArray list) foreach (var n in list) FillNames(n, items);
+        if (node is not JsonObject o) return;
+        if (o.ContainsKey("itemId") && o["name"] is null && o["itemId"]?.GetValue<int>() is { } id && items.Get(id) is { } item) o["name"] = item.Name;
+        foreach (var (_, child) in o.ToList()) FillNames(child, items);
+    }
+
+    // Throws a message for the model unless the item exists in the catalog and fits the slot.
+    void CheckItem(string slot, int itemId)
+    {
         var item = Session.Items.Get(itemId) ?? throw new McpException($"Item {itemId} is not in the catalog, or has no visual. Use search_items to find an item ID.");
         var slots = ItemCatalog.SlotsFor(item);
         if (!slots.Contains(slot)) throw new McpException($"{item.Name} ({itemId}) goes in {string.Join(" or ", slots)}, not {slot}.");
-        return Tab("equip_item", new() { ["slot"] = slot, ["itemId"] = itemId }, ct);
     }
 
     [McpServerTool(Name = "unequip")]
@@ -153,9 +189,19 @@ public sealed class McpTools(AppState state, TabSession tab)
     public Task<string> ResetCustomization(CancellationToken ct) => Tab("reset_customization", [], ct);
 
     [McpServerTool(Name = "compare")]
-    [Description("World of Warcraft: Forever dressing room (Altrobe). Show the current outfit on up to 3 more characters side by side. Pass an empty list to show only the main character.")]
-    public Task<string> Compare([Description("Characters: race ID, sex (0 male, 1 female), models (hd or sd, default hd)")] CompareCharacter[] characters, CancellationToken ct) =>
-        Tab("compare", new() { ["characters"] = JsonSerializer.SerializeToNode(characters, Json) }, ct);
+    [Description("World of Warcraft: Forever dressing room (Altrobe). Show up to 5 more characters side by side. Each wears the main character's outfit, unless you give it its own items (for example the same character at levels 10, 30 and 60). A label such as \"Level 30\" shows above it. Pass an empty list to show only the main character.")]
+    public Task<string> Compare([Description("Characters: race ID, sex (0 male, 1 female), models (hd or sd, default hd), and optionally label, items (slot to item ID, from search_items), hide (slots) and custom (option ID to choice ID)")] CompareCharacter[] characters, CancellationToken ct)
+    {
+        foreach (var c in characters)
+            foreach (var (slot, itemId) in c.Items ?? [])
+                CheckItem(slot, itemId);
+        return Tab("compare", new() { ["characters"] = JsonSerializer.SerializeToNode(characters, Json) }, ct);
+    }
+
+    [McpServerTool(Name = "wear_main_outfit")]
+    [Description("World of Warcraft: Forever dressing room (Altrobe). A side-by-side character drops its own outfit and wears the main character's again.")]
+    public Task<string> WearMainOutfit([Description("Which side-by-side character: 1 is the first one after the main character")] int index, CancellationToken ct) =>
+        Tab("wear_main_outfit", new() { ["index"] = index - 1 }, ct);
 
     [McpServerTool(Name = "set_visibility")]
     [Description("World of Warcraft: Forever dressing room (Altrobe). Hide or show an equipped item without removing it, such as the helm or cloak.")]
@@ -170,5 +216,6 @@ public sealed class McpTools(AppState state, TabSession tab)
     [Description("World of Warcraft: Forever dressing room (Altrobe). A link that opens the current look in Altrobe on any computer with Altrobe installed.")]
     public Task<string> ShareLink(CancellationToken ct) => Tab("share_link", [], ct);
 
-    public sealed record CompareCharacter(int Race, int Sex, string? Models);
+    public sealed record CompareCharacter(int Race, int Sex, string? Models, string? Label = null,
+        Dictionary<string, int>? Items = null, string[]? Hide = null, Dictionary<string, int>? Custom = null);
 }

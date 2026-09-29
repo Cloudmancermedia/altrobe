@@ -4,7 +4,7 @@
 
 import type { CharactersResponse, CustomizationOption, ItemSearchQuery, ItemSearchResult, ModelSet } from './api/types'
 import {
-  MAX_COMPARE, MODEL_SETS, VIEWS, canonicalLook, normalizeLook, shareUrl,
+  MAX_COMPARE, MAX_LABEL, MODEL_SETS, VIEWS, canonicalLook, normalizeLook, shareUrl,
   type CompareCharacter, type Look, type View,
 } from './look/look'
 import { randomCustomization } from './viewer/customize'
@@ -12,6 +12,17 @@ import { isSlotName, type SlotName } from './viewer/dress'
 import type { AppState, Store } from './store'
 
 export type Result = { look: Look; error?: undefined } | { look?: undefined; error: string }
+
+/** A side-by-side character as commands take it: models defaults to hd; the rest is optional. */
+export interface CompareInput {
+  race: number
+  sex: number
+  models?: ModelSet
+  label?: string
+  items?: Record<string, number>
+  hide?: string[]
+  custom?: Record<string, number>
+}
 
 const isId = (x: unknown): x is number => Number.isInteger(x) && (x as number) > 0
 
@@ -83,8 +94,11 @@ export const transitions = {
     return { look: { ...look, custom: {} } }
   },
 
-  /** The characters shown next to the main one, in order; at most MAX_COMPARE. */
-  compare(look: Look, characters: { race: number; sex: number; models?: ModelSet }[], known?: CharactersResponse | null): Result {
+  /**
+   * The characters shown next to the main one, in order; at most MAX_COMPARE. A character with
+   * `items` wears its own outfit (and `hide`); without, it wears the main outfit.
+   */
+  compare(look: Look, characters: CompareInput[], known?: CharactersResponse | null): Result {
     if (!Array.isArray(characters)) return { error: 'compare needs a list of characters' }
     if (characters.length > MAX_COMPARE) return { error: `side by side shows at most ${MAX_COMPARE + 1} characters` }
     const list: CompareCharacter[] = []
@@ -92,9 +106,43 @@ export const transitions = {
       const models = c.models ?? 'hd'
       const err = characterError(known, c.race, c.sex, models)
       if (err) return { error: err }
-      list.push({ race: c.race, sex: c.sex as 0 | 1, models })
+      const entry: CompareCharacter = { race: c.race, sex: c.sex as 0 | 1, models }
+      const label = typeof c.label === 'string' ? c.label.trim().slice(0, MAX_LABEL) : ''
+      if (label) entry.label = label
+      if (c.items) {
+        const items: CompareCharacter['items'] = {}
+        for (const [slot, id] of Object.entries(c.items)) {
+          if (!isSlotName(slot)) return { error: `unknown slot "${slot}"` }
+          if (!isId(id)) return { error: `not an item ID: ${id}` }
+          items[slot] = id
+        }
+        entry.items = items
+      }
+      if (c.hide) {
+        const bad = c.hide.find((s) => !isSlotName(s))
+        if (bad !== undefined) return { error: `unknown slot "${bad}"` }
+        entry.hide = [...new Set(c.hide)] as SlotName[]
+      }
+      if (c.custom) {
+        for (const [o, ch] of Object.entries(c.custom)) if (!isId(Number(o)) || !isId(ch)) return { error: `not an option ID and choice ID: ${o}, ${ch}` }
+        entry.custom = { ...c.custom }
+      }
+      list.push(entry)
     }
     return { look: { ...look, compare: list } }
+  },
+
+  /** A side-by-side character (0-based) drops its own outfit and wears the main one again. */
+  wearMainOutfit(look: Look, index: number): Result {
+    if (!Number.isInteger(index) || index < 0 || index >= look.compare.length) return { error: `no side-by-side character ${index + 1}` }
+    const compare = look.compare.map((c, i) => {
+      if (i !== index) return c
+      const next = { ...c }
+      delete next.items
+      delete next.hide
+      return next
+    })
+    return { look: { ...look, compare } }
   },
 
   setVisibility(look: Look, slot: string, visible: boolean): Result {
@@ -144,7 +192,8 @@ export function createCommands({ store, searchItems, appUrl }: CommandContext) {
     set_customization: (optionId: number, choiceId: number) => apply(transitions.setCustomization(look(), optionId, choiceId, store.get().options)),
     randomize_customization: () => apply(transitions.randomizeCustomization(look(), store.get().options)),
     reset_customization: () => apply(transitions.resetCustomization(look())),
-    compare: (list: { race: number; sex: number; models?: ModelSet }[]) => apply(transitions.compare(look(), list, characters())),
+    compare: (list: CompareInput[]) => apply(transitions.compare(look(), list, characters())),
+    wear_main_outfit: (index: number) => apply(transitions.wearMainOutfit(look(), index)),
     set_visibility: (slot: SlotName | string, visible: boolean) => apply(transitions.setVisibility(look(), slot, visible)),
     set_view: (view: View | string) => apply(transitions.setView(look(), view)),
     /** Replaces the whole look, e.g. from a saved file. Returns the notices from reading it. */
