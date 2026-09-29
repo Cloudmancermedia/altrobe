@@ -18,13 +18,19 @@ public sealed class CharacterCatalog
 {
     readonly IReadOnlyList<RaceInfo> _races;
 
+    // HD ChrModel -> SD ChrModel. Builds without the table (every product but Forever) have no SD bodies.
+    public static Dictionary<int, int> SdVariants(ITables tables) =>
+        tables.Has(T.ChrModelAltVariant)
+            ? tables.Get(T.ChrModelAltVariant).ById("SourceChrModelID").ToDictionary(kv => kv.Key, kv => kv.Value.Int("VariantChrModelID"))
+            : [];
+
     public CharacterCatalog(ITables tables)
     {
         var races = tables.Get(T.ChrRaces).ById();
         var classes = tables.Get(T.ChrClasses).ById();
         var baseInfo = tables.Get(T.CharBaseInfo).GroupByColumn("RaceID");
         var raceModels = tables.Get(T.ChrRaceXChrModel);
-        var altVariant = tables.Get(T.ChrModelAltVariant).ById("SourceChrModelID").ToDictionary(kv => kv.Key, kv => kv.Value.Int("VariantChrModelID"));
+        var altVariant = SdVariants(tables);
 
         _races = baseInfo.Keys.Order().Select(raceId =>
         {

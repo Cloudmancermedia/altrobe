@@ -94,6 +94,8 @@ public sealed class TestApp : WebApplicationFactory<Program>
         int _opens;
         public int Opens => _opens;
 
+        public bool Exists(uint fileDataId) => fileDataId == TextureFdid;
+
         public byte[] Open(uint fileDataId)
         {
             Interlocked.Increment(ref _opens);

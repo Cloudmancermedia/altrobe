@@ -14,7 +14,7 @@ import { Viewer, type ViewerCell } from './viewer/Viewer'
 import { installTestHooks } from './test-hooks'
 import './App.css'
 
-type Phase = 'starting' | 'no-install' | 'offline' | 'ready'
+type Phase = 'starting' | 'no-install' | 'offline' | 'error' | 'ready'
 
 const known = (c: CharactersResponse): KnownCharacters => c.races.flatMap((r) => r.sexes.map((s) => ({ race: r.race, sex: s.sex })))
 
@@ -42,7 +42,8 @@ export default function App() {
       setNotices(store, 'install', ['No game install selected. Choose one to load characters and items.'])
       return
     }
-    setPhase('offline')
+    // An ApiError means the server answered, so "start the server" would be wrong advice.
+    setPhase(e instanceof ApiError ? 'error' : 'offline')
     setNotices(store, 'app', [`Altrobe could not start: ${(e as Error).message}`])
   }, [])
 
@@ -127,6 +128,12 @@ export default function App() {
       <Notices notices={notices} labels={noticeLabels} />
       {phase === 'no-install' && status && (
         <main className="center-panel"><InstallPicker status={status} onSelected={(s) => boot(s)} /></main>
+      )}
+      {phase === 'error' && status && (
+        <main className="center-panel">
+          <p>The server could not load this game install. Pick another product, or <button type="button" onClick={() => start()}>try again</button>.</p>
+          <InstallPicker status={status} onSelected={(s) => boot(s)} />
+        </main>
       )}
       {phase === 'offline' && (
         <main className="center-panel"><p>Start the Altrobe server, then <button type="button" onClick={() => start()}>try again</button>.</p></main>

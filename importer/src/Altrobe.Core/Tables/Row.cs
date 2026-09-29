@@ -48,6 +48,9 @@ public interface ITables
 {
     // Throws when a table cannot be loaded; callers treat that as a data error, not an empty table.
     IReadOnlyList<Row> Get(string table);
+
+    // Whether this build has the table at all. Some tables exist only in some products.
+    bool Has(string table);
 }
 
 public sealed class InMemoryTables : ITables
@@ -62,4 +65,6 @@ public sealed class InMemoryTables : ITables
     }
 
     public IReadOnlyList<Row> Get(string table) => _tables.TryGetValue(table, out var rows) ? rows : [];
+
+    public bool Has(string table) => _tables.ContainsKey(table);
 }

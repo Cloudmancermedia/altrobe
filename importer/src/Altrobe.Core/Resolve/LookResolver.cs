@@ -130,7 +130,7 @@ public sealed class LookResolver
     public LookResolver(ITables t)
     {
         _raceXModel = t.Get(T.ChrRaceXChrModel);
-        _altVariant = t.Get(T.ChrModelAltVariant).ById("SourceChrModelID").ToDictionary(kv => kv.Key, kv => kv.Value.Int("VariantChrModelID"));
+        _altVariant = Catalog.CharacterCatalog.SdVariants(t);
         _chrModel = t.Get(T.ChrModel).ById();
         _optionsByModel = t.Get(T.ChrCustomizationOption).GroupByColumn("ChrModelID");
         _choicesByOption = t.Get(T.ChrCustomizationChoice).GroupByColumn("ChrCustomizationOptionID");

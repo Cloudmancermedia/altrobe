@@ -12,6 +12,7 @@ import { compositeLook } from './compositor'
 import type { Attachment, Dressed } from './dress'
 import { m2Material } from './m2-material'
 import { itemRootName, prefixItemNames } from './prefix'
+import { clipSeconds } from './timing'
 
 export interface AssetUrls {
   model: (fileDataId: number, ext: 'glb' | 'json') => string
@@ -183,7 +184,7 @@ export async function buildCharacter({ baseLook, dressed, assets, itemSpeed = 0.
       const itemMixer = new THREE.AnimationMixer(item.gltf.scene)
       itemMixer.timeScale = itemSpeed
       for (const { m, c } of itemClips) {
-        c.duration = Math.max(m.durationMs, 1) / 1000 // a 0 ms global sequence holds its first key
+        c.duration = clipSeconds(m.durationMs)
         itemMixer.clipAction(c).play()
       }
       itemMixers.push(itemMixer)
@@ -199,7 +200,7 @@ export async function buildCharacter({ baseLook, dressed, assets, itemSpeed = 0.
   const standMeta = body.meta.animations?.find((a) => a.id === 0 && a.variation === 0 && a.name)
   const stand = standMeta && body.gltf.animations.find((c) => c.name === standMeta.name)
   if (standMeta && stand) {
-    stand.duration = standMeta.durationMs / 1000
+    stand.duration = clipSeconds(standMeta.durationMs)
     mixer = new THREE.AnimationMixer(root)
     mixer.clipAction(stand).play()
   }
@@ -209,7 +210,7 @@ export async function buildCharacter({ baseLook, dressed, assets, itemSpeed = 0.
   for (const a of body.meta.animations ?? []) {
     const c = a.globalSequence !== undefined && a.name ? body.gltf.animations.find((x) => x.name === a.name) : undefined
     if (!c) continue
-    c.duration = a.durationMs / 1000
+    c.duration = clipSeconds(a.durationMs)
     mixer ??= new THREE.AnimationMixer(root)
     mixer.clipAction(c).play()
   }
