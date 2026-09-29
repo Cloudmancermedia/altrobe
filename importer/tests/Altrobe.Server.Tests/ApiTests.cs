@@ -80,7 +80,8 @@ public class ApiTests : IClassFixture<ApiTests.Fixture>
     {
         var s = await Body(await _app.Local().GetAsync("/api/v1/status"));
 
-        Assert.False(string.IsNullOrEmpty(s.GetProperty("version").GetString()));
+        // Builds without -p:Version report the development default; packages stamp their own.
+        Assert.Equal("0.1.0-dev", s.GetProperty("version").GetString());
         Assert.Equal(_app.CacheRoot, s.GetProperty("cacheFolder").GetString());
         var install = s.GetProperty("installs").EnumerateArray().Single();
         Assert.Equal(_app.InstallDir, install.GetProperty("path").GetString());
