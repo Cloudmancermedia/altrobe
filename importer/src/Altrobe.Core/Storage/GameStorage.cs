@@ -7,6 +7,9 @@ public interface IGameFiles
 {
     // Throws FileNotFoundException when the file is not in the local install.
     byte[] Open(uint fileDataId);
+
+    // Whether the build lists the file at all.
+    bool Exists(uint fileDataId);
 }
 
 // Local-only view of one product's CASC storage. Never downloads from Blizzard's CDN.

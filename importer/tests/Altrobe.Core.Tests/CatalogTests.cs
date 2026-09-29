@@ -134,6 +134,16 @@ public class CharacterCatalogTests
             R(("ID", 3), ("SourceChrModelID", 3), ("VariantChrModelID", 259)));
 
     [Fact]
+    public void ABuildWithoutTheSdVariantTableOffersOnlyHd()
+    {
+        // ChrModelAltVariant exists only in Forever builds; other products must still load.
+        string[] present = [GameTableNames.ChrRaces, GameTableNames.ChrClasses, GameTableNames.CharBaseInfo, GameTableNames.ChrRaceXChrModel];
+        var races = new CharacterCatalog(new StrictTables(Tables(), present)).Races();
+        Assert.Equal([1, 2, 95], races.Select(r => r.Race));
+        Assert.All(races.SelectMany(r => r.Sexes), s => Assert.False(s.Sd));
+    }
+
+    [Fact]
     public void ARaceIsPlayableIffItHasACharBaseInfoRow()
     {
         var races = new CharacterCatalog(Tables()).Races();

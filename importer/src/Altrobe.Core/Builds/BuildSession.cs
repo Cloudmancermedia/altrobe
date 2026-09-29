@@ -14,10 +14,10 @@ public sealed class BuildSession
 {
     readonly IGameFiles _files;
     readonly AssetCache _assets;
-    readonly Lazy<ItemCatalog> _items;
-    readonly Lazy<CharacterCatalog> _characters;
-    readonly Lazy<ItemResolver> _itemResolver;
-    readonly Lazy<LookResolver> _looks;
+    readonly Memo<ItemCatalog> _items;
+    readonly Memo<CharacterCatalog> _characters;
+    readonly Memo<ItemResolver> _itemResolver;
+    readonly Memo<LookResolver> _looks;
 
     public BuildSession(ITables tables, IGameFiles files, string product, string build, string? buildName, string cacheDir)
     {
