@@ -73,6 +73,32 @@ public class ItemCatalogTests
     }
 
     [Fact]
+    public void ItemsWithAModelButNoNameAreListedByTheirSetAndSlot()
+    {
+        // 20 and 21 have Item and appearance rows but no ItemSparse row; 20 is in a set, 21 is not.
+        var t = new InMemoryTables()
+            .Add(GameTableNames.ItemSparse, R(("ID", 1), ("Display_lang", "Robe of the Archmage"), ("InventoryType", (byte)20), ("OverallQualityID", (byte)4)))
+            .Add(GameTableNames.Item, R(("ID", 1), ("InventoryType", (byte)20), ("IconFileDataID", 1001)),
+                R(("ID", 20), ("InventoryType", (byte)5), ("IconFileDataID", 1020)), R(("ID", 21), ("InventoryType", (byte)7), ("IconFileDataID", 1021)),
+                R(("ID", 22), ("InventoryType", (byte)11)))
+            .Add(GameTableNames.ItemSet, R(("ID", 218), ("Name_lang", "Battlegear of Wrath"), ("ItemID", new[] { 20, 0 })));
+        foreach (var id in new[] { 1, 20, 21, 22 })
+            t.Add(GameTableNames.ItemModifiedAppearance, R(("ID", id), ("ItemID", id), ("ItemAppearanceModifierID", 0), ("OrderIndex", 0), ("ItemAppearanceID", id)))
+                .Add(GameTableNames.ItemAppearance, R(("ID", id), ("ItemDisplayInfoID", id)))
+                .Add(GameTableNames.ItemDisplayInfo, R(("ID", id)));
+        var catalog = new ItemCatalog(t);
+
+        var all = catalog.Search(new ItemQuery(Limit: 100)).Items;
+        // Named items first; a ring (22) is not worn, so it is left out.
+        Assert.Equal([1, 20, 21], all.Select(i => i.ItemId));
+        var wrath = catalog.Get(20)!;
+        Assert.Equal(("Battlegear of Wrath: chest", "chest", ItemCatalog.UnknownQuality, 1020, true), (wrath.Name, wrath.Slot, wrath.Quality, wrath.IconFileDataId, wrath.Unnamed));
+        Assert.Equal("Unnamed legs (item 21)", catalog.Get(21)!.Name);
+        Assert.Equal([20], catalog.Search(new ItemQuery("wrath")).Items.Select(i => i.ItemId));
+        Assert.False(catalog.Get(1)!.Unnamed);
+    }
+
+    [Fact]
     public void CarriesSlotQualityAndIcon()
     {
         var thunderfury = Catalog().Search(new ItemQuery("THUNDERfury")).Items.Single();

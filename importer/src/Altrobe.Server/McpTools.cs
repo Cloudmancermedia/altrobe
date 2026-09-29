@@ -25,6 +25,9 @@ public sealed class McpTools(AppState state, TabSession tab)
         - For a whole set (a tier set, the High Warlord's gear), use search_sets and equip_set.
         - search_items and search_sets show only real items and sets. Developer, test and NPC items are left
           out; an exact item ID still finds one.
+        - Items and sets marked unnamed have a model in this build but no item name, quality or level
+          (all of tier 1 and tier 2 in the beta). Show them when asked, and say the build has no name for the
+          pieces rather than inventing one; the set name is real.
         - Race IDs come from list_characters. Customization option and choice IDs come from get_look.
         - compare shows the main character's outfit on up to 3 more characters; they all wear the same items.
         - The catalog holds each item's name, slot and quality. It does not know where an item drops, which
@@ -60,7 +63,7 @@ public sealed class McpTools(AppState state, TabSession tab)
         [Description("Results to skip, for paging")] int offset = 0)
     {
         var page = Session.Items.Search(new ItemQuery(query, slot is null ? null : [slot], quality is null ? null : [quality.Value], Math.Clamp(limit, 1, 50), offset));
-        return JsonSerializer.Serialize(new { total = page.Total, items = page.Items.Select(i => new { i.ItemId, i.Name, i.Slot, i.Quality, i.Internal }) }, Json);
+        return JsonSerializer.Serialize(new { total = page.Total, items = page.Items.Select(i => new { i.ItemId, i.Name, i.Slot, quality = i.Unnamed ? (int?)null : i.Quality, i.Internal, i.Unnamed }) }, Json);
     }
 
     [McpServerTool(Name = "search_sets", ReadOnly = true)]
@@ -73,7 +76,7 @@ public sealed class McpTools(AppState state, TabSession tab)
         var page = Session.Sets.Search(new SetQuery(query, Math.Clamp(limit, 1, 20), offset));
         return JsonSerializer.Serialize(new { total = page.Total, sets = page.Sets.Select(s => new
         {
-            s.SetId, s.Name, s.Internal,
+            s.SetId, s.Name, s.Internal, s.Unnamed,
             pieces = s.Pieces.Select(p => new { p.Slot, p.Item.ItemId, p.Item.Name }),
         }) }, Json);
     }

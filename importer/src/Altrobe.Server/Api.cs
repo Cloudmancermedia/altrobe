@@ -11,8 +11,8 @@ public static class Api
     // A set as the web app and MCP clients see it: pieces flattened to item fields plus the slot.
     public static object SetJson(ItemSetInfo s) => new
     {
-        s.SetId, s.Name, s.Internal,
-        pieces = s.Pieces.Select(p => new { p.Slot, p.Item.ItemId, p.Item.Name, p.Item.Quality, p.Item.IconFileDataId }),
+        s.SetId, s.Name, s.Internal, s.Unnamed,
+        pieces = s.Pieces.Select(p => new { p.Slot, p.Item.ItemId, p.Item.Name, p.Item.Quality, p.Item.IconFileDataId, p.Item.Unnamed }),
         skipped = s.Skipped,
     };
 
@@ -136,7 +136,8 @@ public static class Api
             if (ParseModelSet(req.Query["models"]) is not { } set) return ApiErrors.BadRequest("models must be hd or sd.");
 
             var r = sel.Session.ResolveItem(id, race, int.Parse(s[0]!), set);
-            if (r.Error == null) return Results.Json(r);
+            // An item with a model but no ItemSparse row goes by the name the catalog made for it.
+            if (r.Error == null) return Results.Json(sel.Session.Items.Get(id) is { Unnamed: true } unnamed ? r with { Name = unnamed.Name } : r);
             return r.Name == "(no ItemSparse row)"
                 ? ApiErrors.NotFound("item_not_found", $"Item {id} is not in this build.")
                 : ApiErrors.NotFound("no_visual", $"Item {id} ({r.Name}) has no visual: {r.Error}.");

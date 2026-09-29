@@ -8,7 +8,8 @@ public sealed record SetPiece(string Slot, ItemSummary Item);
 public sealed record SkippedPiece(int ItemId, string Reason);
 
 // Internal: a developer or placeholder set by its name (ItemCatalog.IsInternal). Listed last.
-public sealed record ItemSetInfo(int SetId, string Name, IReadOnlyList<SetPiece> Pieces, IReadOnlyList<SkippedPiece> Skipped, bool Internal);
+// Unnamed: every piece is unnamed in this build (ItemSummary.Unnamed), as tier 2 is in the Forever beta.
+public sealed record ItemSetInfo(int SetId, string Name, IReadOnlyList<SetPiece> Pieces, IReadOnlyList<SkippedPiece> Skipped, bool Internal, bool Unnamed = false);
 
 // IncludeInternal: also list developer sets and match developer pieces. An exact set ID finds one either way.
 public sealed record SetQuery(string? Text = null, int Limit = 20, int Offset = 0, bool IncludeInternal = false);
@@ -67,6 +68,6 @@ public sealed class SetCatalog
             else pieces.Add(new SetPiece(free, item));
         }
         var name = set.Str("Name_lang");
-        return new ItemSetInfo(set.Int("ID"), name, pieces, skipped, ItemCatalog.IsInternal(name));
+        return new ItemSetInfo(set.Int("ID"), name, pieces, skipped, ItemCatalog.IsInternal(name), pieces.Count > 0 && pieces.All(p => p.Item.Unnamed));
     }
 }

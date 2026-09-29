@@ -5,7 +5,9 @@ namespace Altrobe.Core.Catalog;
 
 // Internal: a developer or NPC item by its name (see ItemCatalog.IsInternal). Left out of searches
 // unless asked for, and listed last when included.
-public sealed record ItemSummary(int ItemId, string Name, string Slot, int InventoryType, int Quality, int IconFileDataId, bool Internal = false);
+// Unnamed: the build has a model for the item but no ItemSparse row, so no name, quality or level.
+// Its name is made up from its set and slot (or its slot and ID), and it is listed after named items.
+public sealed record ItemSummary(int ItemId, string Name, string Slot, int InventoryType, int Quality, int IconFileDataId, bool Internal = false, bool Unnamed = false);
 
 // IncludeInternal: also list developer and NPC items. An exact item ID finds one either way.
 public sealed record ItemQuery(string? Text = null, IReadOnlyCollection<string>? Slots = null, IReadOnlyCollection<int>? Qualities = null, int Limit = 50, int Offset = 0, bool IncludeInternal = false);
@@ -17,6 +19,8 @@ public sealed record ItemPage(int Total, IReadOnlyList<ItemSummary> Items);
 public sealed class ItemCatalog
 {
     public const int MaxLimit = 200;
+    // Quality of an unnamed item, whose ItemSparse row (and so its quality) is missing.
+    public const int UnknownQuality = -1;
 
     // Same mapping as the web app's dress.ts slotNameForInventoryType.
     public static readonly IReadOnlyDictionary<int, string> SlotNames = new Dictionary<int, string>
@@ -44,21 +48,35 @@ public sealed class ItemCatalog
         var appearance = tables.Get(T.ItemAppearance).ById();
         var display = tables.Get(T.ItemDisplayInfo).ById();
 
+        // The first set that lists an item names its unnamed pieces.
+        var setOf = new Dictionary<int, string>();
+        foreach (var set in tables.Get(T.ItemSet))
+            foreach (var id in set.Ints("ItemID").Where(i => i != 0))
+                setOf.TryAdd(id, set.Str("Name_lang"));
+
         _items = tables.Get(T.ItemModifiedAppearance).GroupByColumn("ItemID")
             .Select(g => (itemId: g.Key, ima: PrimaryAppearance(g.Value)))
-            .Where(x => sparse.ContainsKey(x.itemId)
+            .Where(x => (sparse.ContainsKey(x.itemId) || item.ContainsKey(x.itemId))
                 && appearance.TryGetValue(x.ima.Int("ItemAppearanceID"), out var a)
                 && display.ContainsKey(a.Int("ItemDisplayInfoID")))
             .Select(x =>
             {
-                var s = sparse[x.itemId];
-                var inventoryType = s.Int("InventoryType");
-                var name = s.Str("Display_lang");
-                return new ItemSummary(x.itemId, name, SlotNames.GetValueOrDefault(inventoryType, ""), inventoryType,
-                    s.Int("OverallQualityID"), item.TryGetValue(x.itemId, out var i) ? i.Int("IconFileDataID") : 0, IsInternal(name));
+                var icon = item.TryGetValue(x.itemId, out var i) ? i.Int("IconFileDataID") : 0;
+                if (sparse.TryGetValue(x.itemId, out var s))
+                {
+                    var inventoryType = s.Int("InventoryType");
+                    var name = s.Str("Display_lang");
+                    return new ItemSummary(x.itemId, name, SlotNames.GetValueOrDefault(inventoryType, ""), inventoryType,
+                        s.Int("OverallQualityID"), icon, IsInternal(name));
+                }
+                var type = i!.Int("InventoryType");
+                var slot = SlotNames.GetValueOrDefault(type, "");
+                var made = setOf.TryGetValue(x.itemId, out var setName) ? $"{setName}: {slot}" : $"Unnamed {slot} (item {x.itemId})";
+                return new ItemSummary(x.itemId, made, slot, type, UnknownQuality, icon, setName is not null && IsInternal(setName), Unnamed: true);
             })
             .Where(i => i.Name.Length > 0 && i.Slot.Length > 0)
             .OrderBy(i => i.Internal)
+            .ThenBy(i => i.Unnamed)
             .ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(i => i.ItemId)
             .ToList();

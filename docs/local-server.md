@@ -83,6 +83,9 @@ The tools are the web app's command API: `search_items`, `search_sets`, `equip_s
 - `search_items`, `search_sets` and `list_characters` run on the server and work with no tab open.
   The two searches list only real items and sets; developer, test and NPC items are left out, though
   an exact item ID still finds one. The search panel in the web app lists them, last.
+- Some items have a model but no name, quality or level in the build (in the Forever beta, all of
+  tier 1 and tier 2). They are listed as `unnamed`, named after their set and slot ("Battlegear of
+  Wrath: chest") or, outside a set, "Unnamed chest (item 10006)". Set names are real.
 - The other tools go to the open tab over `GET /api/v1/session`, a WebSocket. The tab runs them with
   the same commands its buttons use, so the 3D view updates live. With no tab open they fail with
   a message saying to open Altrobe. If several tabs are open, the newest one gets the commands.

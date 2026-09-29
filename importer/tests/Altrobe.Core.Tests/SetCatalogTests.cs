@@ -14,11 +14,19 @@ public class SetCatalogTests
         foreach (var (id, name, inv) in new[] { (1, "Lionheart Helm", 1), (2, "Breastplate of Wrath", 5), (3, "Sword of Might", 13), (4, "Mace of Might", 13), (5, "Spare Helm", 1), (9, "Band of Might", 11), (8, "Invisible Belt", 6) })
         {
             t.Add(GameTableNames.ItemSparse, R(("ID", id), ("Display_lang", name), ("InventoryType", (byte)inv), ("OverallQualityID", (byte)4)));
+            t.Add(GameTableNames.Item, R(("ID", id), ("InventoryType", (byte)inv)));
             if (id == 8) continue;
             t.Add(GameTableNames.ItemModifiedAppearance, R(("ID", id), ("ItemID", id), ("ItemAppearanceModifierID", 0), ("OrderIndex", 0), ("ItemAppearanceID", id)))
                 .Add(GameTableNames.ItemAppearance, R(("ID", id), ("ItemDisplayInfoID", id)))
                 .Add(GameTableNames.ItemDisplayInfo, R(("ID", id)));
         }
+        // 30 and 31 have models but no ItemSparse row, like tier 2 in the Forever beta.
+        foreach (var (id, inv) in new[] { (30, 5), (31, 7) })
+            t.Add(GameTableNames.Item, R(("ID", id), ("InventoryType", (byte)inv)))
+                .Add(GameTableNames.ItemModifiedAppearance, R(("ID", id), ("ItemID", id), ("ItemAppearanceModifierID", 0), ("OrderIndex", 0), ("ItemAppearanceID", id)))
+                .Add(GameTableNames.ItemAppearance, R(("ID", id), ("ItemDisplayInfoID", id)))
+                .Add(GameTableNames.ItemDisplayInfo, R(("ID", id)));
+        t.Add(GameTableNames.ItemSet, R(("ID", 218), ("Name_lang", "Battlegear of Wrath"), ("ItemID", new[] { 30, 31 })));
         t.Add(GameTableNames.ItemSet,
             R(("ID", 100), ("Name_lang", "Battlegear of Might"), ("ItemID", new[] { 1, 2, 3, 4, 5, 9, 8, 0 })),
             R(("ID", 101), ("Name_lang", "Rings Only"), ("ItemID", new[] { 9, 0 })),
@@ -40,14 +48,24 @@ public class SetCatalogTests
     }
 
     [Fact]
+    public void ASetOfUnnamedPiecesIsShownUnderItsOwnName()
+    {
+        var (_, sets) = Catalogs();
+        var wrath = sets.Get(218)!;
+        Assert.True(wrath.Unnamed);
+        Assert.Equal([("chest", "Battlegear of Wrath: chest"), ("legs", "Battlegear of Wrath: legs")], wrath.Pieces.Select(p => (p.Slot, p.Item.Name)));
+        Assert.Contains(sets.Search(new SetQuery("battlegear of wrath")).Sets, s => s.SetId == 218);
+    }
+
+    [Fact]
     public void SetsWithNothingToShowAreLeftOutAndDevSetsSortLast()
     {
         var (_, sets) = Catalogs();
         Assert.Null(sets.Get(101));
-        Assert.Equal([100], sets.Search(new SetQuery()).Sets.Select(s => s.SetId));
+        Assert.Equal([100, 218], sets.Search(new SetQuery()).Sets.Select(s => s.SetId));
         var all = sets.Search(new SetQuery(IncludeInternal: true)).Sets;
-        Assert.Equal([100, 102], all.Select(s => s.SetId));
-        Assert.True(all[1].Internal);
+        Assert.Equal([100, 218, 102], all.Select(s => s.SetId));
+        Assert.True(all[2].Internal);
         Assert.Equal([102], sets.Search(new SetQuery("102")).Sets.Select(s => s.SetId)); // exact ID always finds it
     }
 
@@ -55,10 +73,10 @@ public class SetCatalogTests
     public void SearchMatchesSetNamesAndPieceNames()
     {
         var (_, sets) = Catalogs();
-        Assert.Equal([100], sets.Search(new SetQuery("battlegear")).Sets.Select(s => s.SetId));
-        Assert.Equal([100], sets.Search(new SetQuery("wrath")).Sets.Select(s => s.SetId)); // by a piece's name
-        Assert.Equal([100, 102], sets.Search(new SetQuery("wrath", IncludeInternal: true)).Sets.Select(s => s.SetId));
+        Assert.Equal([100, 218], sets.Search(new SetQuery("battlegear")).Sets.Select(s => s.SetId));
+        Assert.Equal([100, 218], sets.Search(new SetQuery("wrath")).Sets.Select(s => s.SetId)); // by a piece's name, or the set's
+        Assert.Equal([100, 218, 102], sets.Search(new SetQuery("wrath", IncludeInternal: true)).Sets.Select(s => s.SetId));
         Assert.Equal([100], sets.Search(new SetQuery("100")).Sets.Select(s => s.SetId)); // by set ID
-        Assert.Equal(2, sets.Search(new SetQuery(Limit: 1, IncludeInternal: true)).Total);
+        Assert.Equal(3, sets.Search(new SetQuery(Limit: 1, IncludeInternal: true)).Total);
     }
 }

@@ -160,6 +160,8 @@ export interface ItemSearchResult {
   iconFileDataId: number
   /** A developer or NPC item, going by its name. Listed after the others. */
   internal?: boolean
+  /** The build has a model but no name, quality or level for it; `name` is made up from its set and slot. */
+  unnamed?: boolean
 }
 export interface SetPiece {
   slot: string
@@ -167,11 +169,14 @@ export interface SetPiece {
   name: string
   quality: number
   iconFileDataId: number
+  unnamed?: boolean
 }
 export interface ItemSetResult {
   setId: number
   name: string
   internal: boolean
+  /** Every piece is unnamed in this build (see ItemSearchResult.unnamed). */
+  unnamed?: boolean
   /** Pieces that can be shown, each with the look slot it goes in. */
   pieces: SetPiece[]
   /** Pieces left out: not worn, no visual, or their slot is taken. */

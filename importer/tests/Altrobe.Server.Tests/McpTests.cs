@@ -91,6 +91,17 @@ public class McpTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task UnnamedSetsAreFoundAndMarked()
+    {
+        var client = await Client();
+        var found = JsonNode.Parse(Text(await client.CallToolAsync("search_sets", new Dictionary<string, object?> { ["query"] = "wrath" }, cancellationToken: Ct)))!;
+        var set = found["sets"]![0]!;
+        Assert.Equal(501, set["setId"]!.GetValue<int>());
+        Assert.True(set["unnamed"]!.GetValue<bool>());
+        Assert.Equal("Battlegear of Wrath: chest", set["pieces"]![0]!["name"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task LookCommandsNeedAnOpenTab()
     {
         var r = await (await Client()).CallToolAsync("get_look", cancellationToken: Ct);

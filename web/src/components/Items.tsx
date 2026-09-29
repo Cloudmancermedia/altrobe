@@ -72,7 +72,7 @@ function SetSearch({ build }: { build: string }) {
               <ItemIcon build={build} fileDataId={s.pieces[0]?.iconFileDataId} quality={quality(s)} />
               <span className="result-text">
                 <span className={`qname q${quality(s)}`}>{s.name}</span>
-                <span className="muted small">{s.pieces.length} pieces · set {s.setId}{s.internal ? ' · dev set' : ''}</span>
+                <span className="muted small">{s.pieces.length} pieces · set {s.setId}{s.unnamed ? ' · pieces unnamed in this build' : ''}{s.internal ? ' · dev set' : ''}</span>
               </span>
             </button>
           </li>
@@ -142,7 +142,7 @@ function SingleItemSearch({ build }: { build: string }) {
               <ItemIcon build={build} fileDataId={r.iconFileDataId} quality={r.quality} />
               <span className="result-text">
                 <span className={`qname q${r.quality}`}>{r.name}</span>
-                <span className="muted small">{SLOT_LABELS[r.slot as SlotName] ?? r.slot} · {r.itemId}{r.internal ? ' · dev or NPC item' : ''}</span>
+                <span className="muted small">{SLOT_LABELS[r.slot as SlotName] ?? r.slot} · {r.itemId}{r.unnamed ? ' · unnamed in this build' : ''}{r.internal ? ' · dev or NPC item' : ''}</span>
               </span>
             </button>
           </li>

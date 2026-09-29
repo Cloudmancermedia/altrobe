@@ -129,6 +129,15 @@ public class ApiTests : IClassFixture<ApiTests.Fixture>
     }
 
     [Fact]
+    public async Task AnUnnamedItemResolvesUnderItsCatalogName()
+    {
+        var client = await _app.Installed();
+        var r = await Body(await client.GetAsync("/api/v1/items/6/resolved?race=2&sex=0&models=hd"));
+        Assert.Equal("Battlegear of Wrath: chest", r.GetProperty("name").GetString());
+        Assert.Equal(5, r.GetProperty("inventoryType").GetInt32());
+    }
+
+    [Fact]
     public async Task SetSearchListsPiecesWithTheirSlots()
     {
         var client = await _app.Installed();
