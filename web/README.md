@@ -9,6 +9,24 @@ npm run lint    # oxlint
 npm test        # Vitest unit tests
 ```
 
+## Browser checks
+
+`e2e/` holds Playwright checks that run the real app against a real World of Warcraft: Forever
+install. They are opt-in and skip unless `ALTROBE_E2E=1` is set and an install is found
+(`ALTROBE_WOW_PATH`, else `/Applications/World of Warcraft`):
+
+```sh
+npx playwright install chromium   # once; the browser goes to your user cache, not the repo
+ALTROBE_E2E=1 npm run test:e2e
+```
+
+The setup (`e2e/global-setup.ts`) builds and starts the .NET server with `--no-browser`, a free
+port and a temporary cache folder, selects the Forever product, and starts Vite with
+`ALTROBE_API` pointing at it. The server runs with `HTTPS_PROXY` and `HTTP_PROXY` set to a dead
+address, so any attempt to reach the internet fails. Each check also fails on a console error, a
+failed request, or a request that leaves the machine. The checks drive the app through the
+dev-only `window.__altrobe` hooks in `src/test-hooks.ts`.
+
 ## Running without the server
 
 `npm run dev:spike` starts `vite dev` with a dev-only adapter (`dev/spike-adapter.ts`) that answers the API from the Phase 1 spike's converted files. Point it at the spike's `output/` folder:

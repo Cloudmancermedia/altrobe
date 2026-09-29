@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    # The browser checks (web/e2e) need a real game install, so CI does not run them.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.x
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: No game content in tracked files
+        run: node scripts/check-no-game-content.mjs
+
+      - name: Script helper tests
+        run: node --test scripts/lib.test.mjs
+
+      - name: Build the server
+        run: dotnet build importer
+
+      - name: Server tests
+        run: dotnet test importer --no-build
+
+      - name: Install web dependencies
+        run: npm --prefix web ci
+
+      - name: Lint the web app
+        run: npm --prefix web run lint
+
+      - name: Web unit tests
+        run: npm --prefix web test
+
+      - name: Build the web app
+        run: npm --prefix web run build

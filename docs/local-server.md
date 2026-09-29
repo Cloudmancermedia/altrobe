@@ -6,7 +6,8 @@ downloads game data from Blizzard; a missing file is an error, not a download.
 
 ## Run it
 
-Needs the .NET 10 SDK.
+Needs the .NET 10 SDK. From the repository root, `npm start` builds the web app and then runs
+the server (see the README's quick start). To run only the server:
 
 ```sh
 cd importer

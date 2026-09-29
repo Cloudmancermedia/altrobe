@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <!--
+      NU1900 means NuGet could not fetch vulnerability data (for example, offline). It is not a
+      vulnerability, so it must not fail the build. NU1901-NU1904 (real advisories) stay errors.
+    -->
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1900</WarningsNotAsErrors>
+  </PropertyGroup>
+</Project>
