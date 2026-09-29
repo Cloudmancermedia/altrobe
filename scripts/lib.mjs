@@ -105,6 +105,19 @@ export const DEV_VERSION = '0.1.0-dev'
 const VERSION = /^\d+\.\d+\.\d+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$/
 
 /** The package version: `explicit` (a leading v is dropped), else a vX.Y.Z `tag`, else DEV_VERSION. */
+// A bare trailing --version would otherwise fall back to a default version without saying so.
+export function parsePackageArgs(args) {
+  let rid, version
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--version') {
+      const value = args[++i]
+      if (value === undefined || value.startsWith('--')) throw new Error('--version needs a value, for example --version 0.1.0-beta.1')
+      version = value
+    } else rid ??= args[i]
+  }
+  return { rid, version }
+}
+
 export function packageVersion({ explicit, tag } = {}) {
   if (explicit !== undefined) {
     const v = explicit.replace(/^v/, '')

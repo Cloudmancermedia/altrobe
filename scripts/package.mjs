@@ -17,14 +17,16 @@ import {
   run,
   serverProject,
   webDir,
+  parsePackageArgs,
   writeZip,
 } from './lib.mjs'
 
 const args = process.argv.slice(2)
 let rid, explicit
-for (let i = 0; i < args.length; i++) {
-  if (args[i] === '--version') explicit = args[++i]
-  else rid ??= args[i]
+try {
+  ({ rid, version: explicit } = parsePackageArgs(args))
+} catch (e) {
+  fail(e.message)
 }
 if (!RIDS.includes(rid)) fail(`Usage: npm run package -- <${RIDS.join('|')}> [--version 1.2.3]`)
 const tag = spawnSync('git', ['describe', '--tags', '--exact-match', '--match', 'v*', 'HEAD'], { cwd: root, encoding: 'utf8' })

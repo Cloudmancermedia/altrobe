@@ -113,3 +113,11 @@ test('zip: names that would escape the extract folder are refused', () => {
   assert.throws(() => writeZip([{ name: '../evil', data: Buffer.alloc(1), mode: 0o644 }]), /name/)
   assert.throws(() => writeZip([{ name: '/abs', data: Buffer.alloc(1), mode: 0o644 }]), /name/)
 })
+
+test('package args: rid and an optional --version', async () => {
+  const { parsePackageArgs } = await import('./lib.mjs')
+  assert.deepEqual(parsePackageArgs(['osx-arm64']), { rid: 'osx-arm64', version: undefined })
+  assert.deepEqual(parsePackageArgs(['win-x64', '--version', '0.1.0-beta.1']), { rid: 'win-x64', version: '0.1.0-beta.1' })
+  assert.throws(() => parsePackageArgs(['linux-x64', '--version']), /--version needs a value/)
+  assert.throws(() => parsePackageArgs(['linux-x64', '--version', '--other']), /--version needs a value/)
+})
