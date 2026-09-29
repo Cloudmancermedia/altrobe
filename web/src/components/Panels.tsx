@@ -6,6 +6,7 @@ import { characterLabel, pickCharacter } from '../labels'
 import { MAX_COMPARE, canonicalJSON, type Look } from '../look/look'
 import { setNotices } from '../store'
 import { CharacterPicker } from './CharacterPanel'
+import { installChoices } from './install-choice'
 
 export function ComparePanel({ characters, look }: { characters: CharactersResponse; look: Look }) {
   const add = () => {
@@ -100,7 +101,7 @@ export function Notices({ notices, labels }: { notices: Record<string, string[]>
 }
 
 export function InstallPicker({ status, onSelected }: { status: Status; onSelected: (s: Status) => void }) {
-  const choices = status.installs.flatMap((i) => i.products.map((p) => ({ path: i.path, ...p })))
+  const choices = installChoices(status)
   const [pick, setPick] = useState(0)
   const [path, setPath] = useState('')
   const [product, setProduct] = useState(choices[0]?.product ?? '')
@@ -127,7 +128,7 @@ export function InstallPicker({ status, onSelected }: { status: Status; onSelect
         <form onSubmit={(e) => { e.preventDefault(); const c = choices[pick]; submit({ path: c.path, product: c.product }) }}>
           <label htmlFor="install-found">Installs found</label>
           <select id="install-found" value={pick} onChange={(e) => setPick(Number(e.target.value))}>
-            {choices.map((c, i) => <option key={i} value={i}>{c.path} · {c.product} {c.build}</option>)}
+            {choices.map((c, i) => <option key={i} value={i}>{c.label}</option>)}
           </select>
           <button type="submit" disabled={busy}>Use this install</button>
         </form>

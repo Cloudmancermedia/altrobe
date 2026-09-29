@@ -15,6 +15,9 @@ export interface ApiErrorBody {
 export interface InstallProduct {
   product: string
   build: string
+  buildName?: string
+  /** The server's guess, from the build name, that this product is Forever. */
+  isForever?: boolean
 }
 export interface Install {
   path: string

@@ -22,8 +22,8 @@ the first run:
 
 1. The server looks for your game in `ALTROBE_WOW_PATH`, then `/Applications/World of Warcraft`,
    `C:\Program Files (x86)\World of Warcraft` and `C:\Program Files\World of Warcraft`.
-2. The page lists the products it found and asks which to use. Pick Forever: for build
-   1.60.1.70009 it is listed as `wow_classic_beta 1.60.1.70009`.
+2. If the install has exactly one Forever product, the page selects it for you. Otherwise it lists
+   the products it found, Forever first and labelled, and asks which to use.
 3. Each character and item is converted from your install the first time you view it, so the
    first look at a character takes a few seconds. Converted files are cached in `~/.altrobe`
    (Windows: `%LOCALAPPDATA%\Altrobe`); deleting that folder is safe.

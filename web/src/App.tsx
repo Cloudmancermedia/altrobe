@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ApiError, clearCache, getCharacters, getStatus } from './api/client'
+import { ApiError, clearCache, getCharacters, getStatus, selectInstall } from './api/client'
 import type { CharactersResponse, ResolvedItem, Status } from './api/types'
 import { commands, store } from './app-state'
 import { CharacterPanel, CustomizationPanel } from './components/CharacterPanel'
@@ -13,6 +13,7 @@ import type { Stage } from './viewer/stage'
 import { Viewer, type ViewerCell } from './viewer/Viewer'
 import { installTestHooks } from './test-hooks'
 import './App.css'
+import { foreverChoice } from './components/install-choice'
 
 type Phase = 'starting' | 'no-install' | 'offline' | 'error' | 'ready'
 
@@ -49,6 +50,12 @@ export default function App() {
 
   const boot = useCallback(async (s: Status) => {
     try {
+      // With exactly one Forever product there is nothing to ask; select it and carry on.
+      const auto = !s.active && foreverChoice(s)
+      if (auto) {
+        await selectInstall(auto)
+        s = await getStatus()
+      }
       store.set({ status: s })
       if (!s.active) {
         setPhase('no-install')
