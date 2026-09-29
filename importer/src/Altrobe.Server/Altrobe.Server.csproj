@@ -9,7 +9,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <Version>0.1.0</Version>
+    <!-- Packages override this with -p:Version (scripts/package.mjs). -->
+    <Version>0.1.0-dev</Version>
   </PropertyGroup>
 
 </Project>

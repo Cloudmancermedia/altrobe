@@ -47,6 +47,11 @@ public static class Api
             var product = install.Products.FirstOrDefault(p => p.Product == productName);
             if (product == null) return ApiErrors.NotFound("product_not_found", $"{install.Path} has no product {productName}. Found: {string.Join(", ", install.Products.Select(p => p.Product))}.");
 
+            if (InstallDiscovery.MissingConfigs(install, product) is [_, ..] missing)
+            {
+                log.LogWarning("{Product} in {Path} names config files that are not on disk yet: {Missing}", product.Product, install.Path, string.Join(", ", missing));
+                return ApiErrors.Result(StatusCodes.Status409Conflict, "install_updating", "Battle.net is still updating this install. Let the update finish, then try again.");
+            }
             try
             {
                 state.Select(new Selection(install, product, sessions.Open(install, product, settings.CacheRoot)));

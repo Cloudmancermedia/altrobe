@@ -54,3 +54,17 @@ These are downloaded at build or run time and are not copied into this repositor
 - [DBCD](https://github.com/wowdev/DBCD) (NuGet), MIT License. Reads DB2 tables.
 - [WoWDBDefs](https://github.com/wowdev/WoWDBDefs) table definitions for tables or builds the vendored copies above do not cover, downloaded at run time into Altrobe's cache folder. The definitions are CC BY-SA 4.0 and the code is BSD-3-Clause.
 - [three.js](https://github.com/mrdoob/three.js), loaded from the jsDelivr CDN, MIT License.
+
+## In the downloadable packages
+
+The release zips (built by `npm run package`) include compiled copies of the software below, in
+the `Altrobe` executable or its `wwwroot` folder. Each is under the MIT License, whose text is
+reproduced under wow.export above, with the copyright line shown here.
+
+- .NET runtime and ASP.NET Core: Copyright (c) .NET Foundation and Contributors. <https://github.com/dotnet/runtime>, <https://github.com/dotnet/aspnetcore>
+- TACTSharp: Copyright (c) 2024 Martin Benjamins. <https://github.com/wowdev/TACTSharp>
+- DBCD and DBCD.IO: Copyright (c) 2020 wowdev. <https://github.com/wowdev/DBCD>
+- React, React DOM and scheduler: Copyright (c) Meta Platforms, Inc. and affiliates. <https://github.com/facebook/react>
+- three.js: Copyright (c) 2010-2026 three.js authors. <https://github.com/mrdoob/three.js>
+
+The WoWDBDefs definitions listed above are built into the executable, under CC BY-SA 4.0.

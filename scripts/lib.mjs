@@ -1,7 +1,8 @@
 // Shared helpers for the root npm scripts. Plain Node, no dependencies.
 import { spawnSync } from 'node:child_process'
 import { existsSync, statSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
+import { deflateRawSync, inflateRawSync } from 'node:zlib'
 import { fileURLToPath } from 'node:url'
 
 export const root = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -96,4 +97,142 @@ export function ensureWebDeps() {
   console.log('Installing web app dependencies (npm ci in web/)...')
   const [cmd, args] = npmArgs(['ci'])
   run(cmd, args, { cwd: webDir })
+}
+
+// Runtimes the downloadable packages are built for (dotnet publish -r).
+export const RIDS = ['win-x64', 'osx-arm64', 'osx-x64', 'linux-x64']
+export const DEV_VERSION = '0.1.0-dev'
+const VERSION = /^\d+\.\d+\.\d+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$/
+
+/** The package version: `explicit` (a leading v is dropped), else a vX.Y.Z `tag`, else DEV_VERSION. */
+// A bare trailing --version would otherwise fall back to a default version without saying so.
+export function parsePackageArgs(args) {
+  let rid, version
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--version') {
+      const value = args[++i]
+      if (value === undefined || value.startsWith('--')) throw new Error('--version needs a value, for example --version 0.1.0-beta.1')
+      version = value
+    } else rid ??= args[i]
+  }
+  return { rid, version }
+}
+
+export function packageVersion({ explicit, tag } = {}) {
+  if (explicit !== undefined) {
+    const v = explicit.replace(/^v/, '')
+    if (!VERSION.test(v)) throw new Error(`"${explicit}" is not a version like 1.2.3 or 1.2.3-beta.1`)
+    return v
+  }
+  const fromTag = tag?.replace(/^v/, '')
+  return tag?.startsWith('v') && VERSION.test(fromTag) ? fromTag : DEV_VERSION
+}
+
+export const exeName = (rid) => (rid.startsWith('win-') ? 'Altrobe.exe' : 'Altrobe')
+
+export function packageName(version, rid) {
+  if (!RIDS.includes(rid)) throw new Error(`Unknown runtime "${rid}". Use one of: ${RIDS.join(', ')}`)
+  return `Altrobe-${version}-${rid}`
+}
+
+export function parsePackageName(file) {
+  const m = new RegExp(`^Altrobe-(.+)-(${RIDS.join('|')})\\.zip$`).exec(basename(file))
+  if (!m || !VERSION.test(m[1])) throw new Error(`${file} is not an Altrobe package name like Altrobe-1.2.3-linux-x64.zip`)
+  return { version: m[1], rid: m[2] }
+}
+
+const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
+  let c = n
+  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1
+  return c >>> 0
+})
+
+function crc32(buf) {
+  let c = 0xffffffff
+  for (const b of buf) c = CRC_TABLE[(c ^ b) & 0xff] ^ (c >>> 8)
+  return (c ^ 0xffffffff) >>> 0
+}
+
+function dosDateTime(d) {
+  return {
+    time: (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1),
+    date: ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate(),
+  }
+}
+
+/**
+ * A zip archive of `files` ({name, data, mode}), deflated. Entries record Unix permissions, so the
+ * executable stays executable when unzipped on macOS and Linux. No zip64: every file under 4 GB.
+ */
+export function writeZip(files, when = new Date()) {
+  const { time, date } = dosDateTime(when)
+  const locals = [], centrals = []
+  let offset = 0
+  for (const { name, data, mode } of files) {
+    if (!name || name.startsWith('/') || name.includes('\\') || name.split('/').includes('..') || /^[A-Za-z]:/.test(name))
+      throw new Error(`Bad zip entry name "${name}"`)
+    const nameBuf = Buffer.from(name, 'utf8')
+    const packed = deflateRawSync(data, { level: 9 })
+    const crc = crc32(data)
+    const local = Buffer.alloc(30)
+    local.writeUInt32LE(0x04034b50, 0)
+    local.writeUInt16LE(20, 4)
+    local.writeUInt16LE(0x0800, 6) // names are UTF-8
+    local.writeUInt16LE(8, 8)
+    local.writeUInt16LE(time, 10)
+    local.writeUInt16LE(date, 12)
+    local.writeUInt32LE(crc, 14)
+    local.writeUInt32LE(packed.length, 18)
+    local.writeUInt32LE(data.length, 22)
+    local.writeUInt16LE(nameBuf.length, 26)
+    const central = Buffer.alloc(46)
+    central.writeUInt32LE(0x02014b50, 0)
+    central.writeUInt16LE((3 << 8) | 20, 4) // made by Unix, so unzip reads the permissions below
+    central.writeUInt16LE(20, 6)
+    central.writeUInt16LE(0x0800, 8)
+    central.writeUInt16LE(8, 10)
+    central.writeUInt16LE(time, 12)
+    central.writeUInt16LE(date, 14)
+    central.writeUInt32LE(crc, 16)
+    central.writeUInt32LE(packed.length, 20)
+    central.writeUInt32LE(data.length, 24)
+    central.writeUInt16LE(nameBuf.length, 28)
+    central.writeUInt32LE(((0o100000 | mode) << 16) >>> 0, 38) // regular file + mode
+    central.writeUInt32LE(offset, 42)
+    locals.push(local, nameBuf, packed)
+    centrals.push(central, nameBuf)
+    offset += local.length + nameBuf.length + packed.length
+  }
+  const cd = Buffer.concat(centrals)
+  const end = Buffer.alloc(22)
+  end.writeUInt32LE(0x06054b50, 0)
+  end.writeUInt16LE(files.length, 8)
+  end.writeUInt16LE(files.length, 10)
+  end.writeUInt32LE(cd.length, 12)
+  end.writeUInt32LE(offset, 16)
+  return Buffer.concat([...locals, cd, end])
+}
+
+/** The entries of a zip made by writeZip (or any plain, non-zip64 zip): {name, data, mode}. */
+export function readZip(buf) {
+  let end = buf.length - 22
+  while (end >= 0 && buf.readUInt32LE(end) !== 0x06054b50) end--
+  if (end < 0) throw new Error('Not a zip file')
+  const count = buf.readUInt16LE(end + 10)
+  let p = buf.readUInt32LE(end + 16)
+  const entries = []
+  for (let i = 0; i < count; i++) {
+    if (buf.readUInt32LE(p) !== 0x02014b50) throw new Error('Corrupt zip central directory')
+    const method = buf.readUInt16LE(p + 10)
+    const size = buf.readUInt32LE(p + 20)
+    const nameLen = buf.readUInt16LE(p + 28), extraLen = buf.readUInt16LE(p + 30), commentLen = buf.readUInt16LE(p + 32)
+    const mode = (buf.readUInt32LE(p + 38) >>> 16) & 0o777
+    const local = buf.readUInt32LE(p + 42)
+    const name = buf.toString('utf8', p + 46, p + 46 + nameLen)
+    const start = local + 30 + buf.readUInt16LE(local + 26) + buf.readUInt16LE(local + 28)
+    const raw = buf.subarray(start, start + size)
+    entries.push({ name, mode, data: method === 8 ? inflateRawSync(raw) : Buffer.from(raw) })
+    p += 46 + nameLen + extraLen + commentLen
+  }
+  return entries
 }

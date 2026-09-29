@@ -80,7 +80,8 @@ public class ApiTests : IClassFixture<ApiTests.Fixture>
     {
         var s = await Body(await _app.Local().GetAsync("/api/v1/status"));
 
-        Assert.False(string.IsNullOrEmpty(s.GetProperty("version").GetString()));
+        // Builds without -p:Version report the development default; packages stamp their own.
+        Assert.Equal("0.1.0-dev", s.GetProperty("version").GetString());
         Assert.Equal(_app.CacheRoot, s.GetProperty("cacheFolder").GetString());
         var install = s.GetProperty("installs").EnumerateArray().Single();
         Assert.Equal(_app.InstallDir, install.GetProperty("path").GetString());
@@ -89,6 +90,20 @@ public class ApiTests : IClassFixture<ApiTests.Fixture>
         Assert.Equal(TestApp.Build, product.GetProperty("build").GetString());
         Assert.Equal("WOW-70009patch1.60.1_ForeverBeta", product.GetProperty("buildName").GetString());
         Assert.True(product.GetProperty("isForever").GetBoolean());
+    }
+
+    [Fact]
+    public async Task InstallSaysBattleNetIsUpdatingWhenAConfigIsMissing()
+    {
+        using var app = new TestApp();
+        File.Delete(app.CdnConfigFile);
+
+        var r = await app.Local().PostAsync("/api/v1/install", TestApp.Json("""{"product":"wow_classic_beta"}"""));
+
+        await AssertError(r, HttpStatusCode.Conflict, "install_updating");
+        var message = (await Body(r)).GetProperty("error").GetProperty("message").GetString();
+        Assert.Equal("Battle.net is still updating this install. Let the update finish, then try again.", message);
+        Assert.Equal(JsonValueKind.Null, (await Body(await app.Local().GetAsync("/api/v1/status"))).GetProperty("active").ValueKind);
     }
 
     [Fact]

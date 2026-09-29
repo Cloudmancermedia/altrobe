@@ -105,6 +105,25 @@ public class InstallDiscoveryTests : IDisposable
         Assert.Equal(Path.GetFullPath(_dir), found[0].Path);
     }
 
+    [Fact]
+    public void ListsConfigFilesThatBuildInfoNamesButTheInstallLacks()
+    {
+        // Mid-update, Battle.net points .build.info at configs it has not downloaded yet.
+        MakeInstall(_dir);
+        var install = InstallDiscovery.TryRead(_dir)!;
+        var beta = install.Products.Single(p => p.Product == "wow_classic_beta");
+        var cdnConfig = Path.Combine(_dir, "Data", "config", "cc", "cc", "cccc0000000000000000000000000001");
+
+        Assert.Equal([cdnConfig], InstallDiscovery.MissingConfigs(install, beta));
+
+        Directory.CreateDirectory(Path.GetDirectoryName(cdnConfig)!);
+        File.WriteAllText(cdnConfig, "# CDN Configuration\n");
+        Assert.Empty(InstallDiscovery.MissingConfigs(install, beta));
+
+        var forever = install.Products.Single(p => p.Product == "wow_forever");
+        Assert.Equal([Path.Combine(_dir, "Data", "config", "aa", "aa", "aaaa0000000000000000000000000003")], InstallDiscovery.MissingConfigs(install, forever));
+    }
+
     static void MakeInstall(string dir)
     {
         Directory.CreateDirectory(dir);

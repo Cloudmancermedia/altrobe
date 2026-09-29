@@ -3,7 +3,19 @@ import { test } from 'node:test'
 import { mkdtempSync, mkdirSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { gameContentProblems, hasDotnetSdk, nodeIsNewEnough, prefixLines, serverPort, webDepsStale } from './lib.mjs'
+import {
+  gameContentProblems,
+  hasDotnetSdk,
+  nodeIsNewEnough,
+  packageName,
+  packageVersion,
+  parsePackageName,
+  prefixLines,
+  readZip,
+  serverPort,
+  webDepsStale,
+  writeZip,
+} from './lib.mjs'
 
 test('node 20 or newer is accepted', () => {
   assert.equal(nodeIsNewEnough('20.0.0'), true)
@@ -59,4 +71,53 @@ test('web dependencies are stale when missing or older than the lockfile', () =>
   utimesSync(join(dir, 'node_modules', '.package-lock.json'), now, now)
   utimesSync(join(dir, 'package-lock.json'), old, old)
   assert.equal(webDepsStale(dir), false, 'installed after the lockfile')
+})
+
+test('package version: an explicit version wins, then a v tag on HEAD, else 0.1.0-dev', () => {
+  assert.equal(packageVersion({ explicit: '1.2.3', tag: 'v9.9.9' }), '1.2.3')
+  assert.equal(packageVersion({ tag: 'v0.2.0' }), '0.2.0')
+  assert.equal(packageVersion({ tag: 'v0.2.0-beta.1' }), '0.2.0-beta.1')
+  assert.equal(packageVersion({ tag: 'not-a-release' }), '0.1.0-dev')
+  assert.equal(packageVersion({}), '0.1.0-dev')
+  assert.equal(packageVersion({ explicit: 'v1.0.0' }), '1.0.0')
+  assert.throws(() => packageVersion({ explicit: '1.0' }), /version/)
+  assert.throws(() => packageVersion({ explicit: '1.0.0/../x' }), /version/)
+})
+
+test('package names round-trip and only known runtimes are accepted', () => {
+  assert.equal(packageName('0.2.0', 'osx-arm64'), 'Altrobe-0.2.0-osx-arm64')
+  assert.deepEqual(parsePackageName('dist-packages/Altrobe-0.2.0-beta.1-win-x64.zip'), { version: '0.2.0-beta.1', rid: 'win-x64' })
+  assert.throws(() => packageName('0.2.0', 'freebsd-x64'), /runtime/)
+  assert.throws(() => parsePackageName('Other-1.0.0-linux-x64.zip'), /package/)
+})
+
+test('zip: files, folders and the executable bit survive a round trip', () => {
+  const big = Buffer.alloc(200_000, 'altrobe ')
+  const zip = writeZip([
+    { name: 'Altrobe-1.0.0-linux-x64/Altrobe', data: Buffer.from('#!/bin/sh\n'), mode: 0o755 },
+    { name: 'Altrobe-1.0.0-linux-x64/wwwroot/index.html', data: big, mode: 0o644 },
+    { name: 'Altrobe-1.0.0-linux-x64/READ ME FIRST.txt', data: Buffer.alloc(0), mode: 0o644 },
+  ])
+  assert.ok(zip.length < big.length / 10, 'compressed')
+  const entries = readZip(zip)
+  assert.deepEqual(entries.map((e) => [e.name, e.mode]), [
+    ['Altrobe-1.0.0-linux-x64/Altrobe', 0o755],
+    ['Altrobe-1.0.0-linux-x64/wwwroot/index.html', 0o644],
+    ['Altrobe-1.0.0-linux-x64/READ ME FIRST.txt', 0o644],
+  ])
+  assert.ok(entries[1].data.equals(big))
+  assert.equal(entries[0].data.toString(), '#!/bin/sh\n')
+})
+
+test('zip: names that would escape the extract folder are refused', () => {
+  assert.throws(() => writeZip([{ name: '../evil', data: Buffer.alloc(1), mode: 0o644 }]), /name/)
+  assert.throws(() => writeZip([{ name: '/abs', data: Buffer.alloc(1), mode: 0o644 }]), /name/)
+})
+
+test('package args: rid and an optional --version', async () => {
+  const { parsePackageArgs } = await import('./lib.mjs')
+  assert.deepEqual(parsePackageArgs(['osx-arm64']), { rid: 'osx-arm64', version: undefined })
+  assert.deepEqual(parsePackageArgs(['win-x64', '--version', '0.1.0-beta.1']), { rid: 'win-x64', version: '0.1.0-beta.1' })
+  assert.throws(() => parsePackageArgs(['linux-x64', '--version']), /--version needs a value/)
+  assert.throws(() => parsePackageArgs(['linux-x64', '--version', '--other']), /--version needs a value/)
 })
