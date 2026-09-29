@@ -77,6 +77,7 @@ public class McpTests : IAsyncLifetime
         var body = JsonNode.Parse(Text(r))!;
         Assert.Equal(3, body["total"]!.GetValue<int>());
         Assert.Contains(body["items"]!.AsArray(), i => i!["name"]!.GetValue<string>() == "Robe of the Archmage");
+        Assert.All(body["items"]!.AsArray(), i => Assert.False(i!["internal"]!.GetValue<bool>()));
     }
 
     [Fact]

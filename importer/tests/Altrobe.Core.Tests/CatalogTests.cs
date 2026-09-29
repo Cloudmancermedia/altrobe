@@ -45,6 +45,29 @@ public class ItemCatalogTests
     }
 
     [Fact]
+    public void DevAndNpcItemsSortLastButStayFindable()
+    {
+        string[] names = ["(DNT) Moonglaive", "Ahn'Qiraj Mace [PH]", "10% Test Speed Boots", "JEFF TEST SWORD", "Unused Feathered Gauntlets",
+            "Monster - Axe, 2H Special NPC (Herod)", "Arcanite Reaper", "Testament of Hope", "Zealot's Robe"];
+        var t = new InMemoryTables();
+        for (var i = 0; i < names.Length; i++)
+        {
+            var id = i + 1;
+            t.Add(GameTableNames.ItemSparse, R(("ID", id), ("Display_lang", names[i]), ("InventoryType", (byte)13), ("OverallQualityID", (byte)2)))
+                .Add(GameTableNames.ItemModifiedAppearance, R(("ID", id), ("ItemID", id), ("ItemAppearanceModifierID", 0), ("OrderIndex", 0), ("ItemAppearanceID", id)))
+                .Add(GameTableNames.ItemAppearance, R(("ID", id), ("ItemDisplayInfoID", id)))
+                .Add(GameTableNames.ItemDisplayInfo, R(("ID", id)));
+        }
+        var all = new ItemCatalog(t).Search(new ItemQuery(Limit: 100)).Items;
+        // Real items first, by name ("Testament" is not the word "Test"); then the rest, by name.
+        Assert.Equal(["Arcanite Reaper", "Testament of Hope", "Zealot's Robe"], all.Take(3).Select(i => i.Name));
+        Assert.All(all.Take(3), i => Assert.False(i.Internal));
+        Assert.All(all.Skip(3), i => Assert.True(i.Internal));
+        Assert.Equal(9, all.Count);
+        Assert.True(new ItemCatalog(t).Search(new ItemQuery("moonglaive")).Items.Single().Internal);
+    }
+
+    [Fact]
     public void CarriesSlotQualityAndIcon()
     {
         var thunderfury = Catalog().Search(new ItemQuery("THUNDERfury")).Items.Single();

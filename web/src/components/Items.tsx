@@ -77,7 +77,7 @@ export function ItemSearch({ build }: { build: string }) {
               <ItemIcon build={build} fileDataId={r.iconFileDataId} quality={r.quality} />
               <span className="result-text">
                 <span className={`qname q${r.quality}`}>{r.name}</span>
-                <span className="muted small">{SLOT_LABELS[r.slot as SlotName] ?? r.slot} · {r.itemId}</span>
+                <span className="muted small">{SLOT_LABELS[r.slot as SlotName] ?? r.slot} · {r.itemId}{r.internal ? ' · dev or NPC item' : ''}</span>
               </span>
             </button>
           </li>

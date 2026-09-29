@@ -48,7 +48,7 @@ matching HTTP status. Until an install is selected, every data endpoint answers 
 | `POST /install` `{"path"?, "product"}` | selects a product; `path` defaults to the first install found. Returns the status. `409` with code `install_updating` when `.build.info` names a build or CDN config that is not in `Data/config` yet, which is how an install looks while Battle.net updates it |
 | `GET /characters` | `build`, `races[]`: `race`, `name`, `classes[]`, `sexes[]` with `hd` and `sd` |
 | `GET /characters/{race}/{sex}?models=hd\|sd&classId=` | the default look: body model, texture layout and sections, geosets, `meshGeosets` (every geoset in the body mesh), texture layers, `choices` (defaults) and `options` (every selectable choice with its geosets and layers) |
-| `GET /items/search?q=&slot=&quality=&limit=&offset=` | array of `itemId`, `name`, `slot` (look slot name), `inventoryType`, `quality`, `iconFileDataId`; total in `X-Total-Count` |
+| `GET /items/search?q=&slot=&quality=&limit=&offset=` | array of `itemId`, `name`, `slot` (look slot name), `inventoryType`, `quality`, `iconFileDataId`, `internal` (a developer, placeholder or NPC item by its name; these sort last); total in `X-Total-Count` |
 | `GET /items/{itemId}/resolved?race=&sex=&models=` | models, textures, body texture sections, geosets, helm hides and attachment points for one race and sex. `404` when the item has no visual |
 
 Assets are converted on first request and cached with `Cache-Control: immutable`:

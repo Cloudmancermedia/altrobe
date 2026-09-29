@@ -22,6 +22,7 @@ public sealed class McpTools(AppState state, TabSession tab)
         WoW character, try items or outfits, or compare how a look shows on different races.
 
         - Always find items with search_items, then equip them by the returned itemId. Never guess item IDs.
+        - Results marked internal are developer, placeholder or NPC items. Skip them unless the user asks for one.
         - Race IDs come from list_characters. Customization option and choice IDs come from get_look.
         - compare shows the main character's outfit on up to 3 more characters; they all wear the same items.
         - The catalog holds each item's name, slot and quality. It does not know where an item drops, which
@@ -57,7 +58,7 @@ public sealed class McpTools(AppState state, TabSession tab)
         [Description("Results to skip, for paging")] int offset = 0)
     {
         var page = Session.Items.Search(new ItemQuery(query, slot is null ? null : [slot], quality is null ? null : [quality.Value], Math.Clamp(limit, 1, 50), offset));
-        return JsonSerializer.Serialize(new { total = page.Total, items = page.Items.Select(i => new { i.ItemId, i.Name, i.Slot, i.Quality }) }, Json);
+        return JsonSerializer.Serialize(new { total = page.Total, items = page.Items.Select(i => new { i.ItemId, i.Name, i.Slot, i.Quality, i.Internal }) }, Json);
     }
 
     [McpServerTool(Name = "list_characters", ReadOnly = true)]

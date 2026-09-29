@@ -158,6 +158,8 @@ export interface ItemSearchResult {
   /** ItemSparse.OverallQualityID: 0 poor ... 5 legendary, 6 artifact, 7 heirloom. */
   quality: number
   iconFileDataId: number
+  /** A developer or NPC item, going by its name. Listed after the others. */
+  internal?: boolean
 }
 export interface ItemSearchQuery {
   q?: string

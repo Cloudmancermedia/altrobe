@@ -3,7 +3,8 @@ using T = Altrobe.Core.Tables.GameTableNames;
 
 namespace Altrobe.Core.Catalog;
 
-public sealed record ItemSummary(int ItemId, string Name, string Slot, int InventoryType, int Quality, int IconFileDataId);
+// Internal: a developer or NPC item by its name (see ItemCatalog.IsInternal). Kept, but listed last.
+public sealed record ItemSummary(int ItemId, string Name, string Slot, int InventoryType, int Quality, int IconFileDataId, bool Internal = false);
 
 public sealed record ItemQuery(string? Text = null, IReadOnlyCollection<string>? Slots = null, IReadOnlyCollection<int>? Qualities = null, int Limit = 50, int Offset = 0);
 
@@ -22,6 +23,15 @@ public sealed class ItemCatalog
         [9] = "wrist", [10] = "hands", [13] = "mainhand", [14] = "offhand", [15] = "mainhand", [16] = "back", [17] = "mainhand",
         [19] = "tabard", [20] = "chest", [21] = "mainhand", [22] = "offhand", [23] = "offhand", [26] = "mainhand",
     };
+    // The client marks none of these in its data (ItemSparse.Flags is 0 on all of them in the Forever
+    // beta), so their names are the only signal: "(DNT)", "[PH]", "TEST", "Unused", and NPC weapons
+    // ("Monster - ...").
+    static readonly System.Text.RegularExpressions.Regex InternalName = new(
+        @"\((DNT|PH)\)|\[(DNT|PH)\]|\bTEST\b|\bTest\b|\bUNUSED\b|\bUnused\b|^Monster - ",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    public static bool IsInternal(string name) => InternalName.IsMatch(name);
+
     readonly IReadOnlyList<ItemSummary> _items;
     readonly Dictionary<int, ItemSummary> _byId;
 
@@ -41,11 +51,13 @@ public sealed class ItemCatalog
             {
                 var s = sparse[x.itemId];
                 var inventoryType = s.Int("InventoryType");
-                return new ItemSummary(x.itemId, s.Str("Display_lang"), SlotNames.GetValueOrDefault(inventoryType, ""), inventoryType,
-                    s.Int("OverallQualityID"), item.TryGetValue(x.itemId, out var i) ? i.Int("IconFileDataID") : 0);
+                var name = s.Str("Display_lang");
+                return new ItemSummary(x.itemId, name, SlotNames.GetValueOrDefault(inventoryType, ""), inventoryType,
+                    s.Int("OverallQualityID"), item.TryGetValue(x.itemId, out var i) ? i.Int("IconFileDataID") : 0, IsInternal(name));
             })
             .Where(i => i.Name.Length > 0 && i.Slot.Length > 0)
-            .OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(i => i.Internal)
+            .ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(i => i.ItemId)
             .ToList();
         _byId = _items.ToDictionary(i => i.ItemId);
