@@ -32,6 +32,9 @@ public sealed class TestApp : WebApplicationFactory<Program>
         var config = Path.Combine(InstallDir, "Data", "config", "aa", "aa");
         Directory.CreateDirectory(config);
         File.WriteAllText(Path.Combine(config, "aaaa0000000000000000000000000001"), "build-name = WOW-70009patch1.60.1_ForeverBeta\n");
+        CdnConfigFile = Path.Combine(InstallDir, "Data", "config", "cc", "cc", "cccc0000000000000000000000000001");
+        Directory.CreateDirectory(Path.GetDirectoryName(CdnConfigFile)!);
+        File.WriteAllText(CdnConfigFile, "# CDN Configuration\n");
         Directory.CreateDirectory(WebRoot);
         File.WriteAllText(Path.Combine(WebRoot, "index.html"), "<!doctype html><title>test web app</title>");
         Directory.CreateDirectory(Path.Combine(WebRoot, "static"));
@@ -39,6 +42,7 @@ public sealed class TestApp : WebApplicationFactory<Program>
     }
 
     public string InstallDir { get; }
+    public string CdnConfigFile { get; }
     public string CacheRoot { get; }
     public string WebRoot { get; }
     public FakeFiles Files { get; } = new();

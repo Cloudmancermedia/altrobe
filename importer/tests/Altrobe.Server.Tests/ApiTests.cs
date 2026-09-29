@@ -93,6 +93,20 @@ public class ApiTests : IClassFixture<ApiTests.Fixture>
     }
 
     [Fact]
+    public async Task InstallSaysBattleNetIsUpdatingWhenAConfigIsMissing()
+    {
+        using var app = new TestApp();
+        File.Delete(app.CdnConfigFile);
+
+        var r = await app.Local().PostAsync("/api/v1/install", TestApp.Json("""{"product":"wow_classic_beta"}"""));
+
+        await AssertError(r, HttpStatusCode.Conflict, "install_updating");
+        var message = (await Body(r)).GetProperty("error").GetProperty("message").GetString();
+        Assert.Equal("Battle.net is still updating this install. Let the update finish, then try again.", message);
+        Assert.Equal(JsonValueKind.Null, (await Body(await app.Local().GetAsync("/api/v1/status"))).GetProperty("active").ValueKind);
+    }
+
+    [Fact]
     public async Task InstallValidatesItsBody()
     {
         using var app = new TestApp();

@@ -13,7 +13,7 @@ import type { Stage } from './viewer/stage'
 import { Viewer, type ViewerCell } from './viewer/Viewer'
 import { installTestHooks } from './test-hooks'
 import './App.css'
-import { foreverChoice } from './components/install-choice'
+import { foreverChoice, openFailedNotice } from './components/install-choice'
 
 type Phase = 'starting' | 'no-install' | 'offline' | 'error' | 'ready'
 
@@ -61,7 +61,7 @@ export default function App() {
           store.set({ status: s })
         } catch (e) {
           setPhase('no-install')
-          setNotices(store, 'install', [`Could not open ${auto.product} at ${auto.path}: ${(e as Error).message}. Choose an install.`])
+          setNotices(store, 'install', [openFailedNotice(auto, (e as Error).message)])
           return
         }
       }

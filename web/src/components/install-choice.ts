@@ -17,3 +17,9 @@ export function foreverChoice(status: Status): { path: string; product: string }
   const forever = installChoices(status).filter((c) => c.isForever)
   return forever.length === 1 ? { path: forever[0].path, product: forever[0].product } : null
 }
+
+/** The notice when selecting an install automatically failed. Server messages end in a full stop already. */
+export function openFailedNotice(choice: { path: string; product: string }, message: string): string {
+  const reason = /[.!?]$/.test(message) ? message : `${message}.`
+  return `Could not open ${choice.product} at ${choice.path}: ${reason} Choose an install.`
+}

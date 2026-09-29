@@ -98,10 +98,21 @@ public static class InstallDiscovery
         return map;
     }
 
+    static string ConfigPath(string installDir, string key) => Path.Combine(installDir, "Data", "config", key[..2], key[2..4], key);
+
+    // The build and CDN config files .build.info names that are not on disk. Battle.net rewrites
+    // .build.info before it downloads the new configs, so a non-empty list means an update is under way.
+    public static IReadOnlyList<string> MissingConfigs(WowInstall install, WowProduct product) =>
+        new[] { product.BuildConfig, product.CdnConfig }
+            .Where(k => k.Length >= 4)
+            .Select(k => ConfigPath(install.Path, k))
+            .Where(p => !File.Exists(p))
+            .ToList();
+
     static string? ReadBuildName(string installDir, string buildKey)
     {
         if (buildKey.Length < 4) return null;
-        var path = Path.Combine(installDir, "Data", "config", buildKey[..2], buildKey[2..4], buildKey);
+        var path = ConfigPath(installDir, buildKey);
         if (!File.Exists(path)) return null;
         foreach (var line in File.ReadLines(path))
         {
