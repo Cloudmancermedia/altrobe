@@ -6,6 +6,7 @@ import { QUALITY_NAMES, SLOT_LABELS } from '../labels'
 import type { Look } from '../look/look'
 import { rememberItems, setNotices, useStore } from '../store'
 import { SLOT_ORDER, type SlotName } from '../viewer/dress'
+import { SEARCH_HINT, searchText } from './search-query'
 
 const PAGE = 50
 
@@ -26,11 +27,14 @@ export function ItemSearch({ build }: { build: string }) {
   const [more, setMore] = useState(false)
   const [offset, setOffset] = useState(0)
 
+  const text = searchText(q)
+
   useEffect(() => {
+    if (text === null) return
     const ctrl = new AbortController()
     const t = setTimeout(() => {
       setState('loading')
-      commands.search_items({ q: q.trim(), slot, quality: quality === '' ? undefined : Number(quality), limit: PAGE + 1, offset })
+      commands.search_items({ q: text, slot, quality: quality === '' ? undefined : Number(quality), limit: PAGE + 1, offset })
         .then((r) => {
           if (ctrl.signal.aborted) return
           rememberItems(store, r)
@@ -44,15 +48,18 @@ export function ItemSearch({ build }: { build: string }) {
         })
     }, 250)
     return () => { clearTimeout(t); ctrl.abort() }
-  }, [q, slot, quality, offset])
+  }, [text, slot, quality, offset])
 
+  // Results from an earlier query stay in state; with no query nothing is shown.
+  const shown = text === null ? [] : results
+  const busy = text !== null && state === 'loading'
   const reset = <T,>(set: (v: T) => void) => (v: T) => { setOffset(0); set(v) }
 
   return (
     <section className="panel search" aria-labelledby="search-heading">
       <h2 id="search-heading">Find items</h2>
       <div className="search-controls">
-        <input type="search" placeholder="Search by name" aria-label="Search items by name" value={q} onChange={(e) => reset(setQ)(e.target.value)} />
+        <input type="search" placeholder="Search by name or ID" aria-label="Search items by name or ID" value={q} onChange={(e) => reset(setQ)(e.target.value)} />
         <select aria-label="Slot" value={slot} onChange={(e) => reset(setSlot)(e.target.value)}>
           <option value="">Any slot</option>
           {SLOT_ORDER.map((s) => <option key={s} value={s}>{SLOT_LABELS[s]}</option>)}
@@ -62,8 +69,8 @@ export function ItemSearch({ build }: { build: string }) {
           {QUALITY_NAMES.map((n, i) => <option key={n} value={i}>{n}</option>)}
         </select>
       </div>
-      <ul className="results" aria-live="polite" aria-busy={state === 'loading'}>
-        {results.map((r) => (
+      <ul className="results" aria-live="polite" aria-busy={busy}>
+        {shown.map((r) => (
           <li key={r.itemId}>
             <button type="button" className="result" onClick={() => commands.equip_item(r.slot, r.itemId)}
               title={`Equip in ${SLOT_LABELS[r.slot as SlotName] ?? r.slot}`}>
@@ -76,9 +83,10 @@ export function ItemSearch({ build }: { build: string }) {
           </li>
         ))}
       </ul>
-      {state === 'idle' && results.length === 0 && <p className="muted small">No items match.</p>}
-      {state === 'loading' && <p className="muted small">Searching…</p>}
-      {more && state !== 'loading' && <button type="button" onClick={() => setOffset(offset + PAGE)}>Show more</button>}
+      {text === null && <p className="muted small">{SEARCH_HINT}</p>}
+      {text !== null && state === 'idle' && results.length === 0 && <p className="muted small">No items match.</p>}
+      {busy && <p className="muted small">Searching…</p>}
+      {text !== null && more && !busy && <button type="button" onClick={() => setOffset(offset + PAGE)}>Show more</button>}
     </section>
   )
 }
