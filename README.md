@@ -64,6 +64,9 @@ Other commands, all from the repository root:
 | `npm run package -- <rid>` | Builds a downloadable zip for `win-x64`, `osx-arm64`, `osx-x64` or `linux-x64` in `dist-packages/`. See [docs/releasing.md](docs/releasing.md). |
 | `npm --prefix web run test:e2e` | Browser checks against your real install. Opt-in: run `npx --prefix web playwright install chromium` once, then set `ALTROBE_E2E=1`. Without it they skip. |
 
+To dress characters by asking Claude, connect Claude Code to the server's MCP endpoint (this
+repository's `.mcp.json` does it). See [MCP in docs/local-server.md](docs/local-server.md#mcp-dress-characters-from-claude).
+
 `ALTROBE_WOW_PATH`, `ALTROBE_PORT`, `ALTROBE_CACHE_DIR` and `ALTROBE_NO_BROWSER=1` work with
 `npm start` and `npm run dev`. [docs/local-server.md](docs/local-server.md) covers the server's
 options and API, and [web/README.md](web/README.md) the web app and its browser checks.

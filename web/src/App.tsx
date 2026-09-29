@@ -12,6 +12,7 @@ import { rememberItems, setNotices, useStore } from './store'
 import type { Stage } from './viewer/stage'
 import { Viewer, type ViewerCell } from './viewer/Viewer'
 import { installTestHooks } from './test-hooks'
+import { connectSession } from './session'
 import './App.css'
 import { foreverChoice, openFailedNotice } from './components/install-choice'
 
@@ -92,6 +93,8 @@ export default function App() {
   const start = useCallback(() => getStatus().then(boot, fail), [boot, fail])
   useEffect(() => { void start() }, [start])
   useEffect(() => installTestHooks(() => stageRef.current), [])
+  // Commands from Claude or another MCP client arrive over the server's session channel.
+  useEffect(() => (phase === 'ready' ? connectSession(commands, store) : undefined), [phase])
 
   // Keep the address bar a share link, so a reload keeps the look. replaceState does not fire
   // hashchange; a pasted or edited link does, and loads that look.

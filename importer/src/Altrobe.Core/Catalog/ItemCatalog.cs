@@ -23,6 +23,7 @@ public sealed class ItemCatalog
         [19] = "tabard", [20] = "chest", [21] = "mainhand", [22] = "offhand", [23] = "offhand", [26] = "mainhand",
     };
     readonly IReadOnlyList<ItemSummary> _items;
+    readonly Dictionary<int, ItemSummary> _byId;
 
     public ItemCatalog(ITables tables)
     {
@@ -47,9 +48,16 @@ public sealed class ItemCatalog
             .OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(i => i.ItemId)
             .ToList();
+        _byId = _items.ToDictionary(i => i.ItemId);
     }
 
     public int Count => _items.Count;
+
+    // Null when the item has no visual or no name.
+    public ItemSummary? Get(int itemId) => _byId.GetValueOrDefault(itemId);
+
+    // Look slot names an item may go in: its own, and the off hand for one-handers (dress.ts slotsForInventoryType).
+    public static IReadOnlyList<string> SlotsFor(ItemSummary item) => item.InventoryType == 13 ? [item.Slot, "offhand"] : [item.Slot];
 
     // The appearance an item shows by default: lowest modifier, then lowest OrderIndex (resolve.ts).
     public static Row PrimaryAppearance(IEnumerable<Row> modifiedAppearances) => modifiedAppearances

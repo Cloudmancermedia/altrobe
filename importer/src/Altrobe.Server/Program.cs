@@ -15,12 +15,18 @@ builder.Services.AddSingleton<AppState>();
 builder.Services.AddSingleton<IInstallSource, DiscoveredInstalls>();
 builder.Services.AddSingleton<IBuildSessionFactory, LocalBuildSessions>();
 builder.Services.AddSingleton<IBrowserLauncher, SystemBrowser>();
+builder.Services.AddSingleton<TabSession>();
+// MCP for Claude Code and other clients, at /mcp. Stateless: each request stands alone.
+builder.Services.AddMcpServer(o => o.ServerInfo = new() { Name = "altrobe", Version = Api.AppVersion })
+    .WithHttpTransport(o => o.Stateless = true)
+    .WithTools<McpTools>();
 
 var app = builder.Build();
 settings = app.Services.GetRequiredService<ServerSettings>();
 
 app.UseMiddleware<LocalOnlyMiddleware>();
 app.UseMiddleware<ErrorMiddleware>();
+app.UseWebSockets();
 
 // The web app's bundle lives under /static/, so it never collides with /assets/{build}/.
 if (settings.WebRoot is { } webRoot && Directory.Exists(webRoot))
@@ -36,6 +42,7 @@ else
 }
 
 Api.Map(app);
+app.MapMcp("/mcp");
 
 app.Lifetime.ApplicationStarted.Register(() =>
 {

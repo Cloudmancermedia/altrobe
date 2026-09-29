@@ -33,6 +33,8 @@ files are converted again on the next request.
 - It refuses any request whose `Host` header is not `localhost` or `127.0.0.1`, which stops DNS
   rebinding, and any request with a cross-site `Origin`. It sends no CORS headers.
 - `POST /api/v1/install` needs an `application/json` body, so a plain cross-site form cannot call it.
+- The same Host and Origin checks cover `/mcp` and the tab's WebSocket, so a web page cannot send
+  commands. Any program on the same computer can, as with the rest of the API.
 
 ## API
 
@@ -56,6 +58,36 @@ Assets are converted on first request and cached with `Cache-Control: immutable`
 
 `{build}` must be the selected build, for example `1.60.1.70009`. The web app's own files live
 under `/static/` so they never clash with `/assets/`.
+
+## MCP: dress characters from Claude
+
+The server also speaks MCP (Model Context Protocol) at `http://127.0.0.1:5161/mcp`, over
+streamable HTTP. An MCP client such as Claude Code can then search items and change the look in
+the open Altrobe tab. The user's own Claude plan runs the model; Altrobe only receives commands.
+
+Connect Claude Code from this repository: `.mcp.json` names the server, and Claude Code asks
+before it uses it. From anywhere else:
+
+```sh
+claude mcp add --transport http altrobe http://127.0.0.1:5161/mcp
+```
+
+Then open Altrobe in the browser and ask Claude something like "put the Orc in Thunderfury and
+show the same outfit on an Undead female".
+
+The tools are the web app's command API: `search_items`, `list_characters`, `get_look`,
+`equip_item`, `unequip`, `set_character`, `set_customization`, `randomize_customization`,
+`reset_customization`, `compare`, `set_visibility`, `set_view` and `share_link`.
+
+- `search_items` and `list_characters` run on the server and work with no tab open.
+- The other tools go to the open tab over `GET /api/v1/session`, a WebSocket. The tab runs them with
+  the same commands its buttons use, so the 3D view updates live. With no tab open they fail with
+  a message saying to open Altrobe. If several tabs are open, the newest one gets the commands.
+- `equip_item` checks the item against the catalog first, so a model cannot equip an item ID it
+  made up, or put an item in a slot it does not fit.
+
+Claude Desktop only starts local MCP servers over stdio, so it cannot use this endpoint directly
+yet. A one-click Claude Desktop bundle is the next step.
 
 ## Tests
 

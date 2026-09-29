@@ -8,11 +8,20 @@ namespace Altrobe.Server;
 
 public static class Api
 {
-    static readonly string AppVersion = typeof(Api).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "0.0.0";
+    public static readonly string AppVersion = typeof(Api).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "0.0.0";
 
     public static void Map(WebApplication app)
     {
         var api = app.MapGroup("/api/v1");
+
+        // The viewer tab's command channel (TabSession). Host and Origin are checked by LocalOnlyMiddleware.
+        api.Map("/session", async (HttpContext ctx, TabSession tab) =>
+        {
+            if (!ctx.WebSockets.IsWebSocketRequest) return ApiErrors.BadRequest("Connect with a WebSocket.");
+            using var ws = await ctx.WebSockets.AcceptWebSocketAsync();
+            await tab.RunAsync(ws, ctx.RequestAborted);
+            return Results.Empty;
+        });
 
         api.MapGet("/status", (IInstallSource installs, AppState state, ServerSettings settings) => Results.Json(Status(installs, state, settings)));
 
