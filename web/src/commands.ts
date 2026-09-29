@@ -34,6 +34,18 @@ export const transitions = {
     return { look: { ...look, items: { ...look.items, [slot]: itemId } } }
   },
 
+  /** Several items in one change, such as the pieces of a set. Other slots keep what they have. */
+  equipItems(look: Look, items: { slot: string; itemId: number }[]): Result {
+    if (!Array.isArray(items) || items.length === 0) return { error: 'no items to equip' }
+    let next = look
+    for (const { slot, itemId } of items) {
+      const r = transitions.equipItem(next, slot, itemId)
+      if (r.error !== undefined) return r
+      next = r.look
+    }
+    return { look: next }
+  },
+
   unequip(look: Look, slot: string): Result {
     if (!isSlotName(slot)) return { error: `unknown slot "${slot}"` }
     const items = { ...look.items }
@@ -125,6 +137,7 @@ export function createCommands({ store, searchItems, appUrl }: CommandContext) {
   return {
     search_items: (query: ItemSearchQuery) => searchItems(query),
     equip_item: (slot: SlotName | string, itemId: number) => apply(transitions.equipItem(look(), slot, itemId)),
+    equip_items: (items: { slot: SlotName | string; itemId: number }[]) => apply(transitions.equipItems(look(), items)),
     unequip: (slot: SlotName | string) => apply(transitions.unequip(look(), slot)),
     set_character: (race: number, sex: number, models?: ModelSet) =>
       apply(transitions.setCharacter(look(), race, sex, models, characters())),

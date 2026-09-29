@@ -15,6 +15,7 @@ public sealed class BuildSession
     readonly IGameFiles _files;
     readonly AssetCache _assets;
     readonly Memo<ItemCatalog> _items;
+    readonly Memo<SetCatalog> _sets;
     readonly Memo<CharacterCatalog> _characters;
     readonly Memo<ItemResolver> _itemResolver;
     readonly Memo<LookResolver> _looks;
@@ -28,6 +29,7 @@ public sealed class BuildSession
         CacheDir = cacheDir;
         _assets = new AssetCache(cacheDir);
         _items = new(() => new ItemCatalog(tables));
+        _sets = new(() => new SetCatalog(tables, _items.Value));
         _characters = new(() => new CharacterCatalog(tables));
         _itemResolver = new(() => new ItemResolver(tables));
         _looks = new(() => new LookResolver(tables));
@@ -39,6 +41,7 @@ public sealed class BuildSession
     public string CacheDir { get; }
 
     public ItemCatalog Items => _items.Value;
+    public SetCatalog Sets => _sets.Value;
     public CharacterCatalog Characters => _characters.Value;
     public ItemResolver ItemResolver => _itemResolver.Value;
 

@@ -47,6 +47,12 @@ describe('runRemoteCommand', () => {
     expect(store.get().look.race).toBe(5)
   })
 
+  test('equip_items takes a list of slots and item IDs', async () => {
+    const { run, store } = setup()
+    expect((await run('equip_items', { items: [{ slot: 'chest', itemId: 1 }, { slot: 'mainhand', itemId: 19019 }] })).ok).toBe(true)
+    expect(store.get().look.items).toEqual({ chest: 1, mainhand: 19019 })
+  })
+
   test('errors and unknown commands come back as errors', async () => {
     const { run } = setup()
     expect(await run('set_view', { view: 'top' })).toEqual({ ok: false, error: 'unknown view "top"' })

@@ -138,6 +138,12 @@
   "db2FileDataID": 982457
  },
  {
+  "tableName": "ItemSet",
+  "tableHash": "8E741A98",
+  "dbcFileDataID": 841693,
+  "db2FileDataID": 1343609
+ },
+ {
   "tableName": "ItemSparse",
   "tableHash": "919BE54E",
   "db2FileDataID": 1572924

@@ -129,7 +129,7 @@ public sealed class TestApp : WebApplicationFactory<Program>
             .Add(GameTableNames.CharBaseInfo, R(("ID", 1), ("RaceID", 2), ("ClassID", 1)))
             .Add(GameTableNames.ChrRaceXChrModel, R(("ID", 1), ("ChrRacesID", 2), ("Sex", 0), ("ChrModelID", 3)))
             .Add(GameTableNames.ChrModelAltVariant, R(("ID", 1), ("SourceChrModelID", 3), ("VariantChrModelID", 259)));
-        foreach (var (id, name, invType, quality) in new[] { (1, "Robe of the Archmage", 20, 4), (2, "Thunderfury", 13, 5), (3, "Frostweave Robe", 20, 2), (4, "Plain Robe", 20, 1) })
+        foreach (var (id, name, invType, quality) in new[] { (1, "Robe of the Archmage", 20, 4), (2, "Thunderfury", 13, 5), (3, "Frostweave Robe", 20, 2), (4, "Plain Robe", 20, 1), (5, "(DNT) Test Glaive", 13, 0) })
         {
             t.Add(GameTableNames.ItemSparse, R(("ID", id), ("Display_lang", name), ("InventoryType", (byte)invType), ("OverallQualityID", (byte)quality)));
             t.Add(GameTableNames.Item, R(("ID", id), ("IconFileDataID", 1000 + id)));
@@ -138,6 +138,8 @@ public sealed class TestApp : WebApplicationFactory<Program>
             t.Add(GameTableNames.ItemDisplayInfo, R(("ID", 100 + id), ("ModelResourcesID", new[] { id == 2 ? 50 : 0, 0 }), ("ModelMaterialResourcesID", new[] { id == 2 ? 60 : 0, 0 }),
                 ("GeosetGroup", new int[6]), ("AttachmentGeosetGroup", new int[6]), ("HelmetGeosetVis", new int[2])));
         }
+        // Set 500: a robe, Thunderfury and a second robe that has no free slot.
+        t.Add(GameTableNames.ItemSet, R(("ID", 500), ("Name_lang", "Regalia of the Archmage"), ("ItemID", new[] { 1, 2, 3, 0 })));
         t.Add(GameTableNames.ModelFileData, R(("FileDataID", 148234), ("ModelResourcesID", 50)));
         t.Add(GameTableNames.TextureFileData, R(("FileDataID", 148236), ("MaterialResourcesID", 60), ("UsageType", 0)));
         return t;

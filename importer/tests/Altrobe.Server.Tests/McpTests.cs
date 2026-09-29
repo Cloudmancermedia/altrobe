@@ -53,7 +53,7 @@ public class McpTests : IAsyncLifetime
     {
         var tools = await (await Client()).ListToolsAsync(cancellationToken: Ct);
         var names = tools.Select(t => t.Name).ToHashSet();
-        foreach (var n in new[] { "search_items", "list_characters", "get_look", "equip_item", "unequip", "set_character", "set_customization",
+        foreach (var n in new[] { "search_items", "search_sets", "equip_set", "list_characters", "get_look", "equip_item", "unequip", "set_character", "set_customization",
                      "randomize_customization", "reset_customization", "compare", "set_visibility", "set_view", "share_link" })
             Assert.Contains(n, names);
     }
@@ -78,6 +78,16 @@ public class McpTests : IAsyncLifetime
         Assert.Equal(3, body["total"]!.GetValue<int>());
         Assert.Contains(body["items"]!.AsArray(), i => i!["name"]!.GetValue<string>() == "Robe of the Archmage");
         Assert.All(body["items"]!.AsArray(), i => Assert.False(i!["internal"]!.GetValue<bool>()));
+    }
+
+    [Fact]
+    public async Task ClaudeSearchLeavesOutDevItemsButAnExactIdFindsThem()
+    {
+        var client = await Client();
+        var byName = JsonNode.Parse(Text(await client.CallToolAsync("search_items", new Dictionary<string, object?> { ["query"] = "glaive" }, cancellationToken: Ct)))!;
+        Assert.Equal(0, byName["total"]!.GetValue<int>());
+        var byId = JsonNode.Parse(Text(await client.CallToolAsync("search_items", new Dictionary<string, object?> { ["query"] = "5" }, cancellationToken: Ct)))!;
+        Assert.Equal("(DNT) Test Glaive", byId["items"]![0]!["name"]!.GetValue<string>());
     }
 
     [Fact]
@@ -110,6 +120,28 @@ public class McpTests : IAsyncLifetime
         var wrongSlot = await client.CallToolAsync("equip_item", new Dictionary<string, object?> { ["slot"] = "head", ["itemId"] = 1 }, cancellationToken: ct);
         Assert.True(wrongSlot.IsError);
         Assert.Contains("chest", Text(wrongSlot));
+        Assert.Single(seen);
+    }
+
+    [Fact]
+    public async Task EquipSetSendsEveryPieceInOneCommand()
+    {
+        var seen = new List<JsonObject>();
+        using var tab = await Tab(msg => { seen.Add(msg); return new JsonObject { ["ok"] = true, ["result"] = new JsonObject() }; });
+        var client = await Client();
+        var found = JsonNode.Parse(Text(await client.CallToolAsync("search_sets", new Dictionary<string, object?> { ["query"] = "archmage" }, cancellationToken: Ct)))!;
+        Assert.Equal(500, found["sets"]![0]!["setId"]!.GetValue<int>());
+
+        var r = await client.CallToolAsync("equip_set", new Dictionary<string, object?> { ["setId"] = 500 }, cancellationToken: Ct);
+        Assert.NotEqual(true, r.IsError);
+        var sent = Assert.Single(seen);
+        Assert.Equal("equip_items", sent["command"]!.GetValue<string>());
+        Assert.Equal([("chest", 1), ("mainhand", 2)], sent["args"]!["items"]!.AsArray().Select(i => (i!["slot"]!.GetValue<string>(), i["itemId"]!.GetValue<int>())));
+        // The answer says which pieces were left out, and why.
+        Assert.Contains("Frostweave Robe", Text(r));
+
+        var unknown = await client.CallToolAsync("equip_set", new Dictionary<string, object?> { ["setId"] = 999 }, cancellationToken: Ct);
+        Assert.True(unknown.IsError);
         Assert.Single(seen);
     }
 

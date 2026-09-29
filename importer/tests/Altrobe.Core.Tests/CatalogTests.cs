@@ -45,7 +45,7 @@ public class ItemCatalogTests
     }
 
     [Fact]
-    public void DevAndNpcItemsSortLastButStayFindable()
+    public void DevAndNpcItemsAreOptInExceptByExactId()
     {
         string[] names = ["(DNT) Moonglaive", "Ahn'Qiraj Mace [PH]", "10% Test Speed Boots", "JEFF TEST SWORD", "Unused Feathered Gauntlets",
             "Monster - Axe, 2H Special NPC (Herod)", "Arcanite Reaper", "Testament of Hope", "Zealot's Robe"];
@@ -58,13 +58,18 @@ public class ItemCatalogTests
                 .Add(GameTableNames.ItemAppearance, R(("ID", id), ("ItemDisplayInfoID", id)))
                 .Add(GameTableNames.ItemDisplayInfo, R(("ID", id)));
         }
-        var all = new ItemCatalog(t).Search(new ItemQuery(Limit: 100)).Items;
-        // Real items first, by name ("Testament" is not the word "Test"); then the rest, by name.
-        Assert.Equal(["Arcanite Reaper", "Testament of Hope", "Zealot's Robe"], all.Take(3).Select(i => i.Name));
+        var catalog = new ItemCatalog(t);
+        // By default only real items ("Testament" is not the word "Test").
+        Assert.Equal(["Arcanite Reaper", "Testament of Hope", "Zealot's Robe"], catalog.Search(new ItemQuery(Limit: 100)).Items.Select(i => i.Name));
+        Assert.Empty(catalog.Search(new ItemQuery("moonglaive")).Items);
+        // Opted in: everything, dev and NPC items last.
+        var all = catalog.Search(new ItemQuery(Limit: 100, IncludeInternal: true)).Items;
+        Assert.Equal(9, all.Count);
         Assert.All(all.Take(3), i => Assert.False(i.Internal));
         Assert.All(all.Skip(3), i => Assert.True(i.Internal));
-        Assert.Equal(9, all.Count);
-        Assert.True(new ItemCatalog(t).Search(new ItemQuery("moonglaive")).Items.Single().Internal);
+        // An exact item ID always finds the item, and Get always returns it.
+        Assert.Equal("(DNT) Moonglaive", catalog.Search(new ItemQuery("1")).Items.Single().Name);
+        Assert.True(catalog.Get(1)!.Internal);
     }
 
     [Fact]

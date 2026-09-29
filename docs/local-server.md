@@ -48,7 +48,8 @@ matching HTTP status. Until an install is selected, every data endpoint answers 
 | `POST /install` `{"path"?, "product"}` | selects a product; `path` defaults to the first install found. Returns the status. `409` with code `install_updating` when `.build.info` names a build or CDN config that is not in `Data/config` yet, which is how an install looks while Battle.net updates it |
 | `GET /characters` | `build`, `races[]`: `race`, `name`, `classes[]`, `sexes[]` with `hd` and `sd` |
 | `GET /characters/{race}/{sex}?models=hd\|sd&classId=` | the default look: body model, texture layout and sections, geosets, `meshGeosets` (every geoset in the body mesh), texture layers, `choices` (defaults) and `options` (every selectable choice with its geosets and layers) |
-| `GET /items/search?q=&slot=&quality=&limit=&offset=` | array of `itemId`, `name`, `slot` (look slot name), `inventoryType`, `quality`, `iconFileDataId`, `internal` (a developer, placeholder or NPC item by its name; these sort last); total in `X-Total-Count` |
+| `GET /items/search?q=&slot=&quality=&limit=&offset=` | array of `itemId`, `name`, `slot` (look slot name), `inventoryType`, `quality`, `iconFileDataId`, `internal` (a developer, placeholder or NPC item by its name; these sort last, and the MCP tools leave them out); total in `X-Total-Count` |
+| `GET /sets/search?q=&limit=&offset=` | item sets matching a set name, a piece's name or a set ID: `setId`, `name`, `internal`, `pieces[]` (`slot`, `itemId`, `name`, `quality`, `iconFileDataId`) and `skipped[]` (`itemId`, `reason`); total in `X-Total-Count` |
 | `GET /items/{itemId}/resolved?race=&sex=&models=` | models, textures, body texture sections, geosets, helm hides and attachment points for one race and sex. `404` when the item has no visual |
 
 Assets are converted on first request and cached with `Cache-Control: immutable`:
@@ -75,11 +76,13 @@ claude mcp add --transport http altrobe http://127.0.0.1:5161/mcp
 Then open Altrobe in the browser and ask Claude something like "put the Orc in Thunderfury and
 show the same outfit on an Undead female".
 
-The tools are the web app's command API: `search_items`, `list_characters`, `get_look`,
+The tools are the web app's command API: `search_items`, `search_sets`, `equip_set`, `list_characters`, `get_look`,
 `equip_item`, `unequip`, `set_character`, `set_customization`, `randomize_customization`,
 `reset_customization`, `compare`, `set_visibility`, `set_view` and `share_link`.
 
-- `search_items` and `list_characters` run on the server and work with no tab open.
+- `search_items`, `search_sets` and `list_characters` run on the server and work with no tab open.
+  The two searches list only real items and sets; developer, test and NPC items are left out, though
+  an exact item ID still finds one. The search panel in the web app lists them, last.
 - The other tools go to the open tab over `GET /api/v1/session`, a WebSocket. The tab runs them with
   the same commands its buttons use, so the 3D view updates live. With no tab open they fail with
   a message saying to open Altrobe. If several tabs are open, the newest one gets the commands.

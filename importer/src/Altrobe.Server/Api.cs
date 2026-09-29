@@ -8,6 +8,14 @@ namespace Altrobe.Server;
 
 public static class Api
 {
+    // A set as the web app and MCP clients see it: pieces flattened to item fields plus the slot.
+    public static object SetJson(ItemSetInfo s) => new
+    {
+        s.SetId, s.Name, s.Internal,
+        pieces = s.Pieces.Select(p => new { p.Slot, p.Item.ItemId, p.Item.Name, p.Item.Quality, p.Item.IconFileDataId }),
+        skipped = s.Skipped,
+    };
+
     public static readonly string AppVersion = typeof(Api).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "0.0.0";
 
     public static void Map(WebApplication app)
@@ -92,6 +100,16 @@ public static class Api
                 : Results.Json(look);
         });
 
+        api.MapGet("/sets/search", (HttpRequest req, HttpResponse res, AppState state) =>
+        {
+            if (state.Current is not { } sel) return ApiErrors.NoInstall();
+            if (!TryInt(req.Query["limit"], 20, out var limit) || !TryInt(req.Query["offset"], 0, out var offset)) return ApiErrors.BadRequest("limit and offset must be numbers.");
+            // The search panel lists dev and NPC sets too, last; MCP tools leave them out (McpTools).
+            var page = sel.Session.Sets.Search(new SetQuery(req.Query["q"], limit, offset, IncludeInternal: true));
+            res.Headers["X-Total-Count"] = page.Total.ToString();
+            return Results.Json(page.Sets.Select(SetJson));
+        });
+
         api.MapGet("/items/search", (HttpRequest req, HttpResponse res, AppState state) =>
         {
             if (state.Current is not { } sel) return ApiErrors.NoInstall();
@@ -103,7 +121,8 @@ public static class Api
                 if (!int.TryParse(part, out var v)) return ApiErrors.BadRequest("quality must be a number or a comma-separated list.");
                 qualities.Add(v);
             }
-            var page = sel.Session.Items.Search(new ItemQuery(q["q"], Split(q["slot"]).ToList(), qualities, limit, offset));
+            // The search panel lists dev and NPC items too, last; MCP tools leave them out (McpTools).
+            var page = sel.Session.Items.Search(new ItemQuery(q["q"], Split(q["slot"]).ToList(), qualities, limit, offset, IncludeInternal: true));
             res.Headers["X-Total-Count"] = page.Total.ToString();
             return Results.Json(page.Items);
         });

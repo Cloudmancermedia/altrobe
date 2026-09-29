@@ -22,7 +22,9 @@ public sealed class McpTools(AppState state, TabSession tab)
         WoW character, try items or outfits, or compare how a look shows on different races.
 
         - Always find items with search_items, then equip them by the returned itemId. Never guess item IDs.
-        - Results marked internal are developer, placeholder or NPC items. Skip them unless the user asks for one.
+        - For a whole set (a tier set, the High Warlord's gear), use search_sets and equip_set.
+        - search_items and search_sets show only real items and sets. Developer, test and NPC items are left
+          out; an exact item ID still finds one.
         - Race IDs come from list_characters. Customization option and choice IDs come from get_look.
         - compare shows the main character's outfit on up to 3 more characters; they all wear the same items.
         - The catalog holds each item's name, slot and quality. It does not know where an item drops, which
@@ -59,6 +61,32 @@ public sealed class McpTools(AppState state, TabSession tab)
     {
         var page = Session.Items.Search(new ItemQuery(query, slot is null ? null : [slot], quality is null ? null : [quality.Value], Math.Clamp(limit, 1, 50), offset));
         return JsonSerializer.Serialize(new { total = page.Total, items = page.Items.Select(i => new { i.ItemId, i.Name, i.Slot, i.Quality, i.Internal }) }, Json);
+    }
+
+    [McpServerTool(Name = "search_sets", ReadOnly = true)]
+    [Description("World of Warcraft: Forever dressing room (Altrobe). Search item sets (tier sets, PvP sets such as the High Warlord's, dungeon sets) by set name, a piece's name, or set ID. Each set lists the pieces that can be shown and the slot each goes in. Equip one with equip_set.")]
+    public string SearchSets(
+        [Description("Part of the set name or of a piece's name, or a set ID. Leave empty to browse.")] string? query = null,
+        [Description("Results to return, 1-20")] int limit = 10,
+        [Description("Results to skip, for paging")] int offset = 0)
+    {
+        var page = Session.Sets.Search(new SetQuery(query, Math.Clamp(limit, 1, 20), offset));
+        return JsonSerializer.Serialize(new { total = page.Total, sets = page.Sets.Select(s => new
+        {
+            s.SetId, s.Name, s.Internal,
+            pieces = s.Pieces.Select(p => new { p.Slot, p.Item.ItemId, p.Item.Name }),
+        }) }, Json);
+    }
+
+    [McpServerTool(Name = "equip_set")]
+    [Description("World of Warcraft: Forever dressing room (Altrobe). Put every piece of an item set on the main character in one step. Other slots keep what they have. Find the setId with search_sets.")]
+    public async Task<string> EquipSet([Description("Set ID from search_sets")] int setId, CancellationToken ct)
+    {
+        var set = Session.Sets.Get(setId) ?? throw new McpException($"Set {setId} is not in the catalog, or has no piece that can be shown. Use search_sets to find a set ID.");
+        var items = new JsonArray(set.Pieces.Select(p => (JsonNode)new JsonObject { ["slot"] = p.Slot, ["itemId"] = p.Item.ItemId }).ToArray());
+        var look = JsonNode.Parse(await Tab("equip_items", new() { ["items"] = items }, ct));
+        var skipped = set.Skipped.Select(s => new { s.ItemId, name = Session.Items.Get(s.ItemId)?.Name, s.Reason });
+        return JsonSerializer.Serialize(new { set = set.Name, skipped, look }, Json);
     }
 
     [McpServerTool(Name = "list_characters", ReadOnly = true)]

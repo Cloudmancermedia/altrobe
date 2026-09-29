@@ -26,6 +26,14 @@ describe('transitions', () => {
     expect(bare.items, 'input is not mutated').toEqual({})
   })
 
+  test('equip_items puts several items on in one change and keeps other slots', () => {
+    const start = transitions.equipItem(bare, 'feet', 7).look!
+    const r = transitions.equipItems(start, [{ slot: 'chest', itemId: 1 }, { slot: 'mainhand', itemId: 2 }]).look!
+    expect(r.items).toEqual({ feet: 7, chest: 1, mainhand: 2 })
+    expect(transitions.equipItems(bare, [{ slot: 'ring', itemId: 1 }]).error).toMatch(/unknown slot "ring"/)
+    expect(transitions.equipItems(bare, []).error).toMatch(/no items/)
+  })
+
   test('equip rejects unknown slots and bad IDs', () => {
     expect(transitions.equipItem(bare, 'ring', 1).error).toMatch(/unknown slot/)
     expect(transitions.equipItem(bare, 'head', -1).error).toMatch(/not an item ID/)

@@ -42,6 +42,7 @@ const num = (a: Args, k: string) => a[k] as number
 export async function runRemoteCommand(cmd: Commands, store: Store<AppState>, command: string, args: Args = {}): Promise<RemoteReply> {
   const change: Record<string, () => { error?: string }> = {
     equip_item: () => cmd.equip_item(str(args, 'slot'), num(args, 'itemId')),
+    equip_items: () => cmd.equip_items((args.items ?? []) as { slot: string; itemId: number }[]),
     unequip: () => cmd.unequip(str(args, 'slot')),
     set_character: () => cmd.set_character(num(args, 'race'), num(args, 'sex'), (args.models ?? undefined) as ModelSet | undefined),
     set_customization: () => cmd.set_customization(num(args, 'optionId'), num(args, 'choiceId')),

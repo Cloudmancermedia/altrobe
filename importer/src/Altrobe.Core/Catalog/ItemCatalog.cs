@@ -3,10 +3,12 @@ using T = Altrobe.Core.Tables.GameTableNames;
 
 namespace Altrobe.Core.Catalog;
 
-// Internal: a developer or NPC item by its name (see ItemCatalog.IsInternal). Kept, but listed last.
+// Internal: a developer or NPC item by its name (see ItemCatalog.IsInternal). Left out of searches
+// unless asked for, and listed last when included.
 public sealed record ItemSummary(int ItemId, string Name, string Slot, int InventoryType, int Quality, int IconFileDataId, bool Internal = false);
 
-public sealed record ItemQuery(string? Text = null, IReadOnlyCollection<string>? Slots = null, IReadOnlyCollection<int>? Qualities = null, int Limit = 50, int Offset = 0);
+// IncludeInternal: also list developer and NPC items. An exact item ID finds one either way.
+public sealed record ItemQuery(string? Text = null, IReadOnlyCollection<string>? Slots = null, IReadOnlyCollection<int>? Qualities = null, int Limit = 50, int Offset = 0, bool IncludeInternal = false);
 
 public sealed record ItemPage(int Total, IReadOnlyList<ItemSummary> Items);
 
@@ -84,7 +86,7 @@ public sealed class ItemCatalog
         var text = q.Text?.Trim();
         var id = int.TryParse(text, out var n) ? n : (int?)null;
         var matches = _items.Where(i =>
-            (string.IsNullOrEmpty(text) || i.Name.Contains(text, StringComparison.OrdinalIgnoreCase) || i.ItemId == id)
+            (i.ItemId == id || ((q.IncludeInternal || !i.Internal) && (string.IsNullOrEmpty(text) || i.Name.Contains(text, StringComparison.OrdinalIgnoreCase))))
             && (q.Slots is not { Count: > 0 } || q.Slots.Contains(i.Slot))
             && (q.Qualities is not { Count: > 0 } || q.Qualities.Contains(i.Quality))).ToList();
         return new ItemPage(matches.Count, matches.Skip(offset).Take(limit).ToList());
