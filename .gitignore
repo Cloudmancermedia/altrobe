@@ -22,3 +22,9 @@ obj/
 .env
 .env.*
 .DS_Store
+
+# Playwright output (browsers install outside the repo, under the user's cache folder)
+test-results/
+playwright-report/
+blob-report/
+/package-lock.json
