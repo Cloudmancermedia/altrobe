@@ -2,7 +2,7 @@
 
 A dressing room for World of Warcraft: Forever, in the browser. See the same outfit on different races, save a look, and share it as a link.
 
-Early development. Nothing runs yet.
+Early development. The local server runs; see [docs/local-server.md](docs/local-server.md).
 
 ## How it gets its data
 
