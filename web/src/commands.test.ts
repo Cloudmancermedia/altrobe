@@ -45,7 +45,6 @@ describe('transitions', () => {
     expect(r.compare).toEqual([{ race: 2, sex: 0, models: 'hd', label: 'Level 30', items: { chest: 4071 }, custom: { 20: 390 } }])
     expect(transitions.compare(bare, [{ race: 2, sex: 0, items: { ring: 1 } }]).error).toMatch(/unknown slot "ring"/)
     expect(transitions.compare(bare, [{ race: 2, sex: 0, items: { chest: -1 } }]).error).toMatch(/not an item ID/)
-    // Back to the main outfit.
     const main = transitions.wearMainOutfit(r, 0).look!
     expect(main.compare).toEqual([{ race: 2, sex: 0, models: 'hd', label: 'Level 30', custom: { 20: 390 } }])
     expect(transitions.wearMainOutfit(r, 3).error).toMatch(/no side-by-side character 4/)

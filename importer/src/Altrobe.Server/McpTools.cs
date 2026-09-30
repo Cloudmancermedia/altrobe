@@ -7,7 +7,7 @@ using ModelContextProtocol.Server;
 
 namespace Altrobe.Server;
 
-// The command API (Phase 3 spec) as MCP tools. Catalog reads run here; every look change is sent to
+// The web app's command API as MCP tools. Catalog reads run here; every look change is sent to
 // the open viewer tab, which runs the same commands its buttons use. Items are checked against the
 // catalog first, so a model can only equip items that exist.
 [McpServerToolType]
