@@ -174,6 +174,24 @@ public class LookResolverTests
     }
 
     [Fact]
+    public void ExtraChoicesOutsideCharacterCreationAreLeftOutWhenTheDefaultIsARegularOne()
+    {
+        // Like the Orc's skin colors: 353-354 use a regular requirement (ReqType 3), and 362 is one of the
+        // extras with ReqType 2. Option 70 is like Eye Style, where every choice is ReqType 2.
+        var t = Tables();
+        t.Add(GameTableNames.ChrCustomizationReq, R(("ID", 12), ("ReqType", 2), ("ClassMask", 0), ("OverrideArchive", (sbyte)-1)));
+        Choice(t, 362, 19, order: 9, req: 12);
+        Option(t, 70, "Eye Style", HdModel, order: 7);
+        Choice(t, 700, 70, order: 0, req: 12);
+        Choice(t, 701, 70, order: 1, req: 12);
+        var look = new LookResolver(t).Resolve(Orc, Male, Warrior, ModelSet.Hd, _ => HdMesh)!;
+
+        Assert.Equal([353, 354], look.Options.Single(o => o.OptionId == 19).Choices.Select(c => c.ChoiceId));
+        Assert.Equal([700, 701], look.Options.Single(o => o.OptionId == 70).Choices.Select(c => c.ChoiceId));
+        Assert.Equal(700, look.Options.Single(o => o.OptionId == 70).DefaultChoiceId);
+    }
+
+    [Fact]
     public void SdDefaultsFollowTheHdDefaultByOptionAndChoiceName()
     {
         // The SD Undead "Eye Glow" option lists None first, but HD's default is Glow. An SD option

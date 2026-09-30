@@ -15,6 +15,7 @@
 // - Every element of a choice counts, not only the last one read.
 // - Ears default to 702, not 701 (701 renders the Orc without ears).
 // - An SD option takes the HD model's default choice when option and choice names match.
+// - Extra choices outside character creation are dropped where the option's default is a regular one.
 
 using System.Text.Json.Serialization;
 using Altrobe.Core.Catalog;
@@ -315,6 +316,11 @@ public sealed class LookResolver
             var all = _choicesByOption.Of(opt.Int("ID")).OrderBy(c => c.Int("OrderIndex")).ThenBy(c => c.Int("ID"))
                 .Select(c => (choice: c, fail: ReqFailure(c.Int("ChrCustomizationReqID"), classId))).ToList();
             var pick = optFail != null ? null : all.FirstOrDefault(c => c.fail == null).choice;
+            // Choices whose requirement lacks ReqType bit 1 are extras character creation does not offer
+            // (the Orc gets 8 more skin colors than the 9 it should), but the Skyborne and HD Eye Style
+            // use them as defaults. So they are dropped only where the default is a regular choice.
+            if (pick != null && InCreation(pick.Int("ChrCustomizationReqID")))
+                all = all.Select(c => c.fail == null && !InCreation(c.choice.Int("ChrCustomizationReqID")) ? (c.choice, "not offered at character creation") : c).ToList();
             picks.Add((opt, pick, optFail, all));
         }
         return picks;
@@ -412,6 +418,10 @@ public sealed class LookResolver
         }
         return layers;
     }
+
+    // ReqType bit 1 set, or no requirement: the choice is offered at character creation. Read from the data
+    // (every regular choice has it); WoWDBDefs does not document the bit.
+    bool InCreation(int reqId) => reqId == 0 || (_req.TryGetValue(reqId, out var r) && (r.Int("ReqType") & 1) != 0);
 
     // Returns null if the requirement passes, else the reason it fails.
     string? ReqFailure(int reqId, int classId)
