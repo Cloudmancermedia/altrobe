@@ -29,6 +29,9 @@ public sealed class McpTools(AppState state, TabSession tab)
           (all of tier 1 and tier 2 in the beta). Show them when asked, and say the build has no name for the
           pieces rather than inventing one; the set name is real.
         - Race IDs come from list_characters. Customization option and choice IDs come from get_look.
+        - Weapons have a type (sword, axe, ...) and hands (one-hand, two-hand, ...). A two-hander in the main
+          hand clears the off hand. build_outfit fills the main hand only when given weapon types, since
+          the data does not say which weapons a class can use.
         - For a leveling journey ("an Orc warrior from 10 to 60"), call build_outfit once per level, then put
           the main character at one level and the others in compare with their own items and a label.
         - compare shows up to 5 more characters side by side. They wear the main outfit unless you give one
@@ -41,6 +44,17 @@ public sealed class McpTools(AppState state, TabSession tab)
         """;
 
     const string Slots = "head, neck, shoulder, shirt, chest, waist, legs, feet, wrist, hands, back, mainhand, offhand, tabard";
+    const string WeaponList = "axe, bow, crossbow, dagger, fishing pole, fist weapon, gun, mace, misc, polearm, staff, sword, thrown, wand";
+
+    // A comma-separated list checked against the allowed values, lowercased; null when empty.
+    static List<string>? List(string? text, IEnumerable<string> allowed, string what)
+    {
+        var values = text?.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Select(v => v.ToLowerInvariant()).ToList();
+        if (values is not { Count: > 0 }) return null;
+        var known = allowed.ToHashSet();
+        if (values.FirstOrDefault(v => !known.Contains(v)) is { } bad) throw new McpException($"Unknown {what} \"{bad}\". Use one of: {string.Join(", ", known.Order())}.");
+        return values;
+    }
 
     Altrobe.Core.Builds.BuildSession Session => state.Current?.Session
         ?? throw new McpException("No WoW install is selected yet. Open Altrobe in the browser and pick your World of Warcraft: Forever install.");
@@ -66,18 +80,22 @@ public sealed class McpTools(AppState state, TabSession tab)
         [Description("Highest required level")] int? max_level = null,
         [Description("Armor type: cloth, leather, mail or plate. Comma-separate several.")] string? armor = null,
         [Description("Class ID (from list_characters): leave out items only other classes can use. It does not check armor proficiency; pick the armor type for that.")] int? class_id = null,
+        [Description($"Weapon type: {WeaponList}. Comma-separate several.")] string? weapon = null,
+        [Description("Hands: one-hand, two-hand, main hand, off hand, shield, held in off hand, ranged or thrown. Comma-separate several.")] string? hands = null,
         [Description("Results to return, 1-50")] int limit = 20,
         [Description("Results to skip, for paging")] int offset = 0)
     {
         var armorTypes = armor?.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Select(a => a.ToLowerInvariant()).ToList();
         if (armorTypes?.FirstOrDefault(a => !ItemCatalog.ArmorTypes.Values.Contains(a)) is { } badArmor)
             throw new McpException($"Unknown armor type \"{badArmor}\". Use cloth, leather, mail or plate.");
+        var weapons = List(weapon, ItemCatalog.WeaponTypes.Values, "weapon type");
+        var handsList = List(hands, ItemCatalog.HandsByInventoryType.Values, "hands");
         var page = Session.Items.Search(new ItemQuery(query, slot is null ? null : [slot], quality is null ? null : [quality.Value], Math.Clamp(limit, 1, 50), offset,
-            MinLevel: min_level, MaxLevel: max_level, Armor: armorTypes, ClassId: class_id));
+            MinLevel: min_level, MaxLevel: max_level, Armor: armorTypes, ClassId: class_id, Weapons: weapons, Hands: handsList));
         return JsonSerializer.Serialize(new
         {
             total = page.Total,
-            items = page.Items.Select(i => new { i.ItemId, i.Name, i.Slot, quality = i.Unnamed ? (int?)null : i.Quality, i.RequiredLevel, i.ItemLevel, i.Armor, i.Internal, i.Unnamed }),
+            items = page.Items.Select(i => new { i.ItemId, i.Name, i.Slot, quality = i.Unnamed ? (int?)null : i.Quality, i.RequiredLevel, i.ItemLevel, i.Armor, i.Weapon, i.Hands, i.Internal, i.Unnamed }),
         }, Json);
     }
 
@@ -89,15 +107,21 @@ public sealed class McpTools(AppState state, TabSession tab)
         [Description("Class ID (from list_characters): leave out items only other classes can use")] int? class_id = null,
         [Description("Lowest quality: 0 poor, 1 common, 2 uncommon (green), 3 rare (blue), 4 epic")] int min_quality = 2,
         [Description("Highest quality")] int max_quality = 5,
-        [Description("Slots to fill; default head, shoulder, chest, waist, legs, feet, wrist, hands, back")] string[]? slots = null)
+        [Description("Armor slots to fill; default head, shoulder, chest, waist, legs, feet, wrist, hands, back")] string[]? slots = null,
+        [Description($"Weapon types for the main hand ({WeaponList}); without them the main hand stays empty, because the data does not say which weapons a class can use")] string[]? weapons = null,
+        [Description("Main hand: one-hand or two-hand; default either")] string? hands = null,
+        [Description("Off hand: shield or held (an off-hand item); skipped with a two-hander")] string? off_hand = null)
     {
         var a = armor?.Trim().ToLowerInvariant();
         if (a != null && !ItemCatalog.ArmorTypes.Values.Contains(a)) throw new McpException($"Unknown armor type \"{armor}\". Use cloth, leather, mail or plate.");
-        var outfit = OutfitBuilder.Build(Session.Items, new OutfitRequest(level, a, class_id, min_quality, max_quality, slots));
+        var w = weapons is { Length: > 0 } ? List(string.Join(",", weapons), ItemCatalog.WeaponTypes.Values, "weapon type") : null;
+        if (hands is not (null or "one-hand" or "two-hand")) throw new McpException("hands must be one-hand or two-hand.");
+        if (off_hand is not (null or "shield" or "held")) throw new McpException("off_hand must be shield or held.");
+        var outfit = OutfitBuilder.Build(Session.Items, new OutfitRequest(level, a, class_id, min_quality, max_quality, slots, w, hands, off_hand));
         return JsonSerializer.Serialize(new
         {
             level,
-            items = outfit.Items.ToDictionary(kv => kv.Key, kv => new { kv.Value.ItemId, kv.Value.Name, kv.Value.RequiredLevel, kv.Value.Quality, kv.Value.Armor }),
+            items = outfit.Items.ToDictionary(kv => kv.Key, kv => new { kv.Value.ItemId, kv.Value.Name, kv.Value.RequiredLevel, kv.Value.Quality, kv.Value.Armor, kv.Value.Weapon, kv.Value.Hands }),
             missing = outfit.Missing,
         }, Json);
     }
@@ -143,10 +167,20 @@ public sealed class McpTools(AppState state, TabSession tab)
 
     [McpServerTool(Name = "equip_item")]
     [Description("World of Warcraft: Forever dressing room (Altrobe). Put an item in a slot. Find the itemId with search_items first.")]
-    public Task<string> EquipItem([Description($"Look slot: {Slots}")] string slot, [Description("Item ID from search_items")] int itemId, CancellationToken ct)
+    public async Task<string> EquipItem([Description($"Look slot: {Slots}")] string slot, [Description("Item ID from search_items")] int itemId, CancellationToken ct)
     {
         CheckItem(slot, itemId);
-        return Tab("equip_item", new() { ["slot"] = slot, ["itemId"] = itemId }, ct);
+        var item = Session.Items.Get(itemId)!;
+        if (slot == "offhand")
+        {
+            // The off hand is empty while the main hand holds a two-hander, as in the game.
+            var look = JsonNode.Parse(await Tab("get_look", [], ct));
+            if (look?["items"]?["mainhand"]?["itemId"]?.GetValue<int>() is { } mainId && Session.Items.Get(mainId) is { Hands: "two-hand" } main)
+                throw new McpException($"The main hand holds {main.Name}, a two-handed weapon, so the off hand stays empty. Equip a one-handed weapon first.");
+        }
+        var result = await Tab("equip_item", new() { ["slot"] = slot, ["itemId"] = itemId }, ct);
+        if (slot == "mainhand" && item.Hands == "two-hand") result = await Tab("unequip", new() { ["slot"] = "offhand" }, ct);
+        return result;
     }
 
     static void FillNames(JsonNode? node, ItemCatalog items)
@@ -193,8 +227,12 @@ public sealed class McpTools(AppState state, TabSession tab)
     public Task<string> Compare([Description("Characters: race ID, sex (0 male, 1 female), models (hd or sd, default hd), and optionally label, items (slot to item ID, from search_items), hide (slots) and custom (option ID to choice ID)")] CompareCharacter[] characters, CancellationToken ct)
     {
         foreach (var c in characters)
+        {
             foreach (var (slot, itemId) in c.Items ?? [])
                 CheckItem(slot, itemId);
+            if (c.Items is { } own && own.TryGetValue("mainhand", out var mainId) && own.ContainsKey("offhand") && Session.Items.Get(mainId) is { Hands: "two-hand" } main)
+                throw new McpException($"{main.Name} is two-handed, so that character's off hand must stay empty.");
+        }
         return Tab("compare", new() { ["characters"] = JsonSerializer.SerializeToNode(characters, Json) }, ct);
     }
 

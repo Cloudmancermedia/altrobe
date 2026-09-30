@@ -19,6 +19,10 @@ public class OutfitBuilderTests
         (8, "Cloth Cloak 28", 16, 4, 1, 2, 28, 33, -1), // cloaks are cloth for every class
         (9, "Paladin Mail Boots 28", 8, 4, 3, 2, 28, 33, 2), // paladin only
         (10, "TEST Mail Helm", 1, 4, 3, 2, 30, 35, -1),  // dev item
+        (11, "Claymore 29", 17, 2, 8, 2, 29, 34, -1),    // two-handed sword
+        (12, "Shortsword 30", 13, 2, 7, 2, 30, 35, -1),  // one-handed sword
+        (13, "Wand 30", 26, 2, 19, 2, 30, 35, -1),
+        (14, "Buckler 28", 14, 4, 6, 2, 28, 33, -1),     // shield
     ];
 
     static ItemCatalog Catalog()
@@ -46,6 +50,24 @@ public class OutfitBuilderTests
         Assert.False(o.Items.ContainsKey("head")); // only a dev item
         Assert.Contains("feet", o.Missing);
         Assert.Contains("head", o.Missing);
+    }
+
+    [Fact]
+    public void WeaponsAreFilledWhenTheCallerNamesWeaponTypes()
+    {
+        var c = Catalog();
+        var noWeapons = OutfitBuilder.Build(c, new OutfitRequest(Level: 30, Armor: "mail"));
+        Assert.False(noWeapons.Items.ContainsKey("mainhand"));
+        Assert.Contains("mainhand", noWeapons.Missing);
+
+        var sword = OutfitBuilder.Build(c, new OutfitRequest(Level: 30, Armor: "mail", Weapons: ["sword"]));
+        Assert.Equal(12, sword.Items["mainhand"].ItemId); // highest required level; the wand is not a sword
+        var twoHanded = OutfitBuilder.Build(c, new OutfitRequest(Level: 30, Armor: "mail", Weapons: ["sword"], Hands: "two-hand"));
+        Assert.Equal(11, twoHanded.Items["mainhand"].ItemId);
+        Assert.False(twoHanded.Items.ContainsKey("offhand"));
+        // A one-hander with a shield fills the off hand; a two-hander never does.
+        var sAndB = OutfitBuilder.Build(c, new OutfitRequest(Level: 30, Armor: "mail", Weapons: ["sword"], Hands: "one-hand", OffHand: "shield"));
+        Assert.Equal((12, 14), (sAndB.Items["mainhand"].ItemId, sAndB.Items["offhand"].ItemId));
     }
 
     [Fact]

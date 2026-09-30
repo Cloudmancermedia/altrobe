@@ -125,6 +125,10 @@ public class ItemCatalogTests
         var robe = c.Get(2)!;
         Assert.Equal((57, 62, "cloth"), (robe.RequiredLevel, robe.ItemLevel, robe.Armor));
         Assert.Null(c.Get(6)!.Armor);
+        // Item 6 is ClassID 2 subclass 0 (axe) with inventory type 13 (one-hand).
+        Assert.Equal(("axe", "one-hand"), (c.Get(6)!.Weapon, c.Get(6)!.Hands));
+        Assert.Equal([6], Ids(new ItemQuery(Weapons: ["axe"])));
+        Assert.Equal([6], Ids(new ItemQuery(Hands: ["one-hand"])));
     }
 
     [Fact]

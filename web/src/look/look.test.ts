@@ -138,6 +138,14 @@ test('checkAgainstData drops items without data or in the wrong slot, and flags 
   expect(checkAgainstData(norm(outfitA), { build: '1.60.1.70009' }).notices).toEqual([])
 })
 
+test('checkAgainstData drops the off hand while the main hand holds a two-hander', () => {
+  const look = norm({ ...outfitA, items: { mainhand: 1, offhand: 2 } })
+  const resolvedById = new Map([[1, item(1, 17)], [2, item(2, 14)]])
+  const r = checkAgainstData(look, { resolvedById })
+  expect(r.look.items).toEqual({ mainhand: 1 })
+  expect(r.notices).toEqual(['off hand item 2 not shown: the main hand holds a two-handed weapon'])
+})
+
 test('dressStateFor maps slot names to slot IDs, doubles shoulders and skips hidden slots', () => {
   const state = dressStateFor({ ...norm(outfitA), hide: ['back'] })
   expect(state.character).toBe('2-0-hd')

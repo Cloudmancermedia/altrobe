@@ -44,8 +44,28 @@ type Args = Record<string, unknown>
 const str = (a: Args, k: string) => a[k] as string
 const num = (a: Args, k: string) => a[k] as number
 
-/** Runs one command from the server. Only the commands listed here can be called. */
-export async function runRemoteCommand(cmd: Commands, store: Store<AppState>, command: string, args: Args = {}): Promise<RemoteReply> {
+/**
+ * Waits until every character on screen has finished drawing the current look, so an answer's
+ * notices belong to the change it made. Resolves false after `timeoutMs` without throwing.
+ */
+export async function waitForDrawn(timeoutMs = 15_000): Promise<boolean> {
+  const frame = () => new Promise((r) => requestAnimationFrame(r))
+  // Two frames let React commit the change, which puts the changed characters back in "loading".
+  await frame(); await frame()
+  const end = performance.now() + timeoutMs
+  while (performance.now() < end) {
+    const cells = [...document.querySelectorAll<HTMLElement>('.stage-cell')]
+    if (cells.length && cells.every((c) => c.dataset.state !== 'loading')) return true
+    await new Promise((r) => setTimeout(r, 100))
+  }
+  return false
+}
+
+/**
+ * Runs one command from the server. Only the commands listed here can be called.
+ * @param settle  waits for the view to draw the change before answering (waitForDrawn in the app)
+ */
+export async function runRemoteCommand(cmd: Commands, store: Store<AppState>, command: string, args: Args = {}, settle?: () => Promise<unknown>): Promise<RemoteReply> {
   const change: Record<string, () => { error?: string }> = {
     equip_item: () => cmd.equip_item(str(args, 'slot'), num(args, 'itemId')),
     equip_items: () => cmd.equip_items((args.items ?? []) as { slot: string; itemId: number }[]),
@@ -59,12 +79,16 @@ export async function runRemoteCommand(cmd: Commands, store: Store<AppState>, co
     set_visibility: () => cmd.set_visibility(str(args, 'slot'), args.visible as boolean),
     set_view: () => cmd.set_view(str(args, 'view') as View),
   }
-  if (command === 'get_look') return { ok: true, result: describeLook(store.get()) }
+  if (command === 'get_look') {
+    await settle?.()
+    return { ok: true, result: describeLook(store.get()) }
+  }
   if (command === 'share_link') return { ok: true, result: { link: cmd.share_link() } }
   const run = change[command]
   if (!run) return { ok: false, error: `unknown command "${command}"` }
   const r = run()
   if (r.error !== undefined) return { ok: false, error: r.error }
+  await settle?.()
   // Changes answer with the current choices only; get_look lists them all.
   return { ok: true, result: describeLook(store.get(), false) }
 }
@@ -84,7 +108,7 @@ export function connectSession(cmd: Commands, store: Store<AppState>, url = `${l
       try { msg = JSON.parse(String(e.data)) } catch { return }
       if (msg.type !== 'command' || !msg.id || !msg.command) return
       let reply: RemoteReply
-      try { reply = await runRemoteCommand(cmd, store, msg.command, msg.args ?? {}) } catch (err) { reply = { ok: false, error: (err as Error).message } }
+      try { reply = await runRemoteCommand(cmd, store, msg.command, msg.args ?? {}, () => waitForDrawn()) } catch (err) { reply = { ok: false, error: (err as Error).message } }
       ws?.send(JSON.stringify({ type: 'result', id: msg.id, ...reply }))
     }
     // The server stopped: try again later, backing off to 30 s. A newer tab taking over is final,

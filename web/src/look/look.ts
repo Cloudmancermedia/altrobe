@@ -263,6 +263,12 @@ export function checkAgainstData(look: Look, { build, defaults, choices, resolve
       delete out.items[slot]
     }
   }
+  // As in the game, the off hand stays empty while the main hand holds a two-hander (inventory type 17).
+  const main = out.items.mainhand !== undefined ? resolvedById?.get(out.items.mainhand) : undefined
+  if (main?.inventoryType === 17 && out.items.offhand !== undefined) {
+    notices.push(`off hand item ${out.items.offhand} not shown: the main hand holds a two-handed weapon`)
+    delete out.items.offhand
+  }
   return { look: out, notices }
 }
 

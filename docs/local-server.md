@@ -73,6 +73,9 @@ before it uses it. From anywhere else:
 claude mcp add --transport http altrobe http://127.0.0.1:5161/mcp
 ```
 
+After updating Altrobe, reconnect the client (`/mcp` in Claude Code): clients keep the tool list
+they received when they connected, so new tools and options stay hidden until then.
+
 Then open Altrobe in the browser and ask Claude something like "put the Orc in Thunderfury and
 show the same outfit on an Undead female".
 
@@ -85,7 +88,15 @@ The tools are the web app's command API: `search_items`, `search_sets`, `equip_s
   cloth, leather, mail or plate, from `Item.SubclassID`) and class (`class_id`, from
   `ItemSparse.AllowableClass`), and its results carry `requiredLevel`, `itemLevel` and `armor`.
   Class does not cover armor proficiency, so a model picks the armor type itself.
-- `build_outfit` fills each armor slot and the back for a level: the item with the highest required
+- Items carry a weapon type (`weapon`: sword, axe, mace, dagger and so on, from `Item.SubclassID`) and
+  `hands` (one-hand, two-hand, main hand, off hand, shield, held in off hand, ranged, thrown, from the
+  inventory type), and `search_items` filters on both. A two-hander in the main hand clears the off
+  hand, and an off-hand item is refused while one is held.
+- Look changes and `get_look` answer after the tab has drawn the change (up to 15 s), so their notices
+  belong to the current look.
+- `build_outfit` fills each armor slot and the back for a level, and the main hand when given weapon
+  types (the data does not say which weapons a class can use), with `hands` and an optional shield or
+  off-hand item: the item with the highest required
   level within 7 levels below it, then the highest item level. The same request always gives the same
   outfit. `compare` takes each extra character's own `items` and `label`, so a leveling journey is one
   `build_outfit` call per level and one `compare` call.

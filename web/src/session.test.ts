@@ -69,6 +69,16 @@ describe('runRemoteCommand', () => {
     ])
   })
 
+  test('with a settle function, answers only after the tab has drawn the change', async () => {
+    const { store } = setup()
+    const cmd = createCommands({ store, searchItems: async () => [], appUrl: () => 'http://app.test/' })
+    store.set({ notices: { 'cell:main': ['item 7418 section 1: no texture'] } })
+    // The drawing clears the old notice; the answer must come after it.
+    const settle = async () => { store.set({ notices: { 'cell:main': [] } }) }
+    const r = await runRemoteCommand(cmd, store, 'unequip', { slot: 'chest' }, settle)
+    expect((r.result as { notices: string[] }).notices).toEqual([])
+  })
+
   test('share_link returns a link', async () => {
     const { run } = setup()
     const r = await run('share_link')

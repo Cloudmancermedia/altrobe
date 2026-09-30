@@ -13,7 +13,8 @@ namespace Altrobe.Server;
 //                { "type": "result", "id": "7", "ok": false, "error": "unknown slot \"ring\"" }
 public sealed class TabSession(ServerSettings settings, ILogger<TabSession> log)
 {
-    public static readonly TimeSpan CommandTimeout = TimeSpan.FromSeconds(20);
+    // Longer than the tab waits for drawing (15 s in session.ts), so a slow first view still answers.
+    public static readonly TimeSpan CommandTimeout = TimeSpan.FromSeconds(30);
     // Close code for a tab replaced by a newer one. The web app does not reconnect after it.
     public const WebSocketCloseStatus Replaced = (WebSocketCloseStatus)4001;
 

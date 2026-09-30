@@ -11,6 +11,10 @@ namespace Altrobe.Core.Catalog;
 // null. AllowableClass is ItemSparse's class mask (bit classId - 1; -1 for any class).
 public sealed record ItemSummary(int ItemId, string Name, string Slot, int InventoryType, int Quality, int IconFileDataId, bool Internal = false, bool Unnamed = false)
 {
+    // Weapon type (sword, axe, ...) for weapons; Hands from the inventory type: one-hand, two-hand,
+    // main hand, off hand, shield, held in off hand, ranged, thrown.
+    public string? Weapon { get; init; }
+    public string? Hands { get; init; }
     public int? RequiredLevel { get; init; }
     public int? ItemLevel { get; init; }
     public string? Armor { get; init; }
@@ -20,8 +24,10 @@ public sealed record ItemSummary(int ItemId, string Name, string Slot, int Inven
 // IncludeInternal: also list developer and NPC items. An exact item ID finds one either way.
 // MinLevel and MaxLevel bound the required level; items with no known level (unnamed) never match them.
 // Armor: armor types to keep. ClassId: leave out items restricted to other classes.
+// Weapons: weapon types to keep. Hands: hands values to keep.
 public sealed record ItemQuery(string? Text = null, IReadOnlyCollection<string>? Slots = null, IReadOnlyCollection<int>? Qualities = null, int Limit = 50, int Offset = 0, bool IncludeInternal = false,
-    int? MinLevel = null, int? MaxLevel = null, IReadOnlyCollection<string>? Armor = null, int? ClassId = null);
+    int? MinLevel = null, int? MaxLevel = null, IReadOnlyCollection<string>? Armor = null, int? ClassId = null,
+    IReadOnlyCollection<string>? Weapons = null, IReadOnlyCollection<string>? Hands = null);
 
 public sealed record ItemPage(int Total, IReadOnlyList<ItemSummary> Items);
 
@@ -36,6 +42,23 @@ public sealed class ItemCatalog
     public static readonly IReadOnlyDictionary<int, string> ArmorTypes = new Dictionary<int, string> { [1] = "cloth", [2] = "leather", [3] = "mail", [4] = "plate" };
 
     static string? ArmorOf(Row? item) => item != null && item.Int("ClassID") == 4 ? ArmorTypes.GetValueOrDefault(item.Int("SubclassID")) : null;
+
+    // Item class 2 (weapon) subclasses, checked against item names in the Forever beta. One- and
+    // two-handed kinds share a name; Hands tells them apart, because a few "two-handed" subclass items
+    // are one-handers.
+    public static readonly IReadOnlyDictionary<int, string> WeaponTypes = new Dictionary<int, string>
+    {
+        [0] = "axe", [1] = "axe", [2] = "bow", [3] = "gun", [4] = "mace", [5] = "mace", [6] = "polearm", [7] = "sword", [8] = "sword",
+        [10] = "staff", [13] = "fist weapon", [14] = "misc", [15] = "dagger", [16] = "thrown", [18] = "crossbow", [19] = "wand", [20] = "fishing pole",
+    };
+
+    public static readonly IReadOnlyDictionary<int, string> HandsByInventoryType = new Dictionary<int, string>
+    {
+        [13] = "one-hand", [17] = "two-hand", [21] = "main hand", [22] = "off hand", [14] = "shield", [23] = "held in off hand",
+        [15] = "ranged", [26] = "ranged", [25] = "thrown",
+    };
+
+    static string? WeaponOf(Row? item) => item != null && item.Int("ClassID") == 2 ? WeaponTypes.GetValueOrDefault(item.Int("SubclassID")) : null;
 
     // Same mapping as the web app's dress.ts slotNameForInventoryType.
     public static readonly IReadOnlyDictionary<int, string> SlotNames = new Dictionary<int, string>
@@ -85,12 +108,16 @@ public sealed class ItemCatalog
                         s.Int("OverallQualityID"), icon, IsInternal(name))
                     {
                         RequiredLevel = s.Int("RequiredLevel"), ItemLevel = s.Int("ItemLevel"), Armor = ArmorOf(i), AllowableClass = s.Int("AllowableClass"),
+                        Weapon = WeaponOf(i), Hands = HandsByInventoryType.GetValueOrDefault(inventoryType),
                     };
                 }
                 var type = i!.Int("InventoryType");
                 var slot = SlotNames.GetValueOrDefault(type, "");
                 var made = setOf.TryGetValue(x.itemId, out var setName) ? $"{setName}: {slot}" : $"Unnamed {slot} (item {x.itemId})";
-                return new ItemSummary(x.itemId, made, slot, type, UnknownQuality, icon, setName is not null && IsInternal(setName), Unnamed: true) { Armor = ArmorOf(i) };
+                return new ItemSummary(x.itemId, made, slot, type, UnknownQuality, icon, setName is not null && IsInternal(setName), Unnamed: true)
+                {
+                    Armor = ArmorOf(i), Weapon = WeaponOf(i), Hands = HandsByInventoryType.GetValueOrDefault(type),
+                };
             })
             .Where(i => i.Name.Length > 0 && i.Slot.Length > 0)
             .OrderBy(i => i.Internal)
@@ -131,7 +158,9 @@ public sealed class ItemCatalog
             && (q.MinLevel is not { } min || i.RequiredLevel >= min)
             && (q.MaxLevel is not { } max || i.RequiredLevel <= max)
             && (q.Armor is not { Count: > 0 } || (i.Armor != null && q.Armor.Contains(i.Armor)))
-            && (q.ClassId is not { } cls || i.AllowableClass == -1 || (i.AllowableClass & (1 << (cls - 1))) != 0)).ToList();
+            && (q.ClassId is not { } cls || i.AllowableClass == -1 || (i.AllowableClass & (1 << (cls - 1))) != 0)
+            && (q.Weapons is not { Count: > 0 } || (i.Weapon != null && q.Weapons.Contains(i.Weapon)))
+            && (q.Hands is not { Count: > 0 } || (i.Hands != null && q.Hands.Contains(i.Hands)))).ToList();
         return new ItemPage(matches.Count, matches.Skip(offset).Take(limit).ToList());
     }
 }

@@ -124,6 +124,44 @@ public class McpTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task WeaponsHaveATypeAndHandsAndBuildOutfitFillsThemWhenAsked()
+    {
+        var client = await Client();
+        var found = JsonNode.Parse(Text(await client.CallToolAsync("search_items", new Dictionary<string, object?> { ["weapon"] = "sword", ["hands"] = "two-hand" }, cancellationToken: Ct)))!;
+        var claymore = found["items"]!.AsArray().Single()!;
+        Assert.Equal((8, "sword", "two-hand"), (claymore["itemId"]!.GetValue<int>(), claymore["weapon"]!.GetValue<string>(), claymore["hands"]!.GetValue<string>()));
+        var outfit = JsonNode.Parse(Text(await client.CallToolAsync("build_outfit", new Dictionary<string, object?> { ["level"] = 32, ["weapons"] = new[] { "sword" }, ["hands"] = "two-hand" }, cancellationToken: Ct)))!;
+        Assert.Equal(8, outfit["items"]!["mainhand"]!["itemId"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task ATwoHanderClearsTheOffHandAndAnOffHandItemIsRefusedWithOne()
+    {
+        var seen = new List<JsonObject>();
+        var mainhand = 0;
+        using var tab = await Tab(msg =>
+        {
+            seen.Add(msg);
+            if (msg["command"]!.GetValue<string>() == "equip_item" && msg["args"]!["slot"]!.GetValue<string>() == "mainhand") mainhand = msg["args"]!["itemId"]!.GetValue<int>();
+            var items = mainhand == 0 ? new JsonObject() : new JsonObject { ["mainhand"] = new JsonObject { ["itemId"] = mainhand, ["name"] = null } };
+            return new JsonObject { ["ok"] = true, ["result"] = new JsonObject { ["items"] = items } };
+        });
+        var client = await Client();
+        var r = await client.CallToolAsync("equip_item", new Dictionary<string, object?> { ["slot"] = "mainhand", ["itemId"] = 8 }, cancellationToken: Ct);
+        Assert.NotEqual(true, r.IsError);
+        Assert.Contains(seen, m => m["command"]!.GetValue<string>() == "unequip" && m["args"]!["slot"]!.GetValue<string>() == "offhand");
+
+        var shield = await client.CallToolAsync("equip_item", new Dictionary<string, object?> { ["slot"] = "offhand", ["itemId"] = 9 }, cancellationToken: Ct);
+        Assert.True(shield.IsError);
+        Assert.Contains("two-handed", Text(shield));
+
+        var bad = new[] { new Dictionary<string, object?> { ["race"] = 2, ["sex"] = 0, ["items"] = new Dictionary<string, int> { ["mainhand"] = 8, ["offhand"] = 9 } } };
+        var cmp = await client.CallToolAsync("compare", new Dictionary<string, object?> { ["characters"] = bad }, cancellationToken: Ct);
+        Assert.True(cmp.IsError);
+        Assert.Contains("two-handed", Text(cmp));
+    }
+
+    [Fact]
     public async Task LookCommandsNeedAnOpenTab()
     {
         var r = await (await Client()).CallToolAsync("get_look", cancellationToken: Ct);

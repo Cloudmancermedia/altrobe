@@ -132,10 +132,23 @@ public sealed class TestApp : WebApplicationFactory<Program>
         foreach (var (id, name, invType, quality) in new[] { (1, "Robe of the Archmage", 20, 4), (2, "Thunderfury", 13, 5), (3, "Frostweave Robe", 20, 2), (4, "Plain Robe", 20, 1), (5, "(DNT) Test Glaive", 13, 0) })
         {
             t.Add(GameTableNames.ItemSparse, R(("ID", id), ("Display_lang", name), ("InventoryType", (byte)invType), ("OverallQualityID", (byte)quality)));
-            t.Add(GameTableNames.Item, R(("ID", id), ("IconFileDataID", 1000 + id)));
+            t.Add(GameTableNames.Item, id == 2
+                ? R(("ID", id), ("IconFileDataID", 1000 + id), ("InventoryType", (byte)13), ("ClassID", 2), ("SubclassID", 7))
+                : R(("ID", id), ("IconFileDataID", 1000 + id)));
             t.Add(GameTableNames.ItemModifiedAppearance, R(("ID", id), ("ItemID", id), ("ItemAppearanceModifierID", 0), ("OrderIndex", 0), ("ItemAppearanceID", id)));
             t.Add(GameTableNames.ItemAppearance, R(("ID", id), ("ItemDisplayInfoID", 100 + id)));
             t.Add(GameTableNames.ItemDisplayInfo, R(("ID", 100 + id), ("ModelResourcesID", new[] { id == 2 ? 50 : 0, 0 }), ("ModelMaterialResourcesID", new[] { id == 2 ? 60 : 0, 0 }),
+                ("GeosetGroup", new int[6]), ("AttachmentGeosetGroup", new int[6]), ("HelmetGeosetVis", new int[2])));
+        }
+        // Thunderfury (2) is a one-handed sword; 8 is a two-handed sword and 9 a shield.
+        foreach (var (id, name, inv, cls, sub) in new[] { (8, "Claymore", 17, 2, 8), (9, "Buckler", 14, 4, 6) })
+        {
+            t.Add(GameTableNames.ItemSparse, R(("ID", id), ("Display_lang", name), ("InventoryType", (byte)inv), ("OverallQualityID", (byte)2),
+                ("RequiredLevel", 30), ("ItemLevel", 35), ("AllowableClass", -1)));
+            t.Add(GameTableNames.Item, R(("ID", id), ("InventoryType", (byte)inv), ("ClassID", cls), ("SubclassID", sub)));
+            t.Add(GameTableNames.ItemModifiedAppearance, R(("ID", id), ("ItemID", id), ("ItemAppearanceModifierID", 0), ("OrderIndex", 0), ("ItemAppearanceID", id)));
+            t.Add(GameTableNames.ItemAppearance, R(("ID", id), ("ItemDisplayInfoID", 100 + id)));
+            t.Add(GameTableNames.ItemDisplayInfo, R(("ID", 100 + id), ("ModelResourcesID", new[] { 0, 0 }), ("ModelMaterialResourcesID", new[] { 0, 0 }),
                 ("GeosetGroup", new int[6]), ("AttachmentGeosetGroup", new int[6]), ("HelmetGeosetVis", new int[2])));
         }
         // Item 7: level 30 leather legs.
