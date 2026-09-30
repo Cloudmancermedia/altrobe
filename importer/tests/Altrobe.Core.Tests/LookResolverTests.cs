@@ -174,19 +174,28 @@ public class LookResolverTests
     }
 
     [Fact]
-    public void ExtraChoicesOutsideCharacterCreationAreLeftOutWhenTheDefaultIsARegularOne()
+    public void OnlyCharacterCreationChoicesAreOfferedWhereAnOptionHasThem()
     {
         // Like the Orc's skin colors: 353-354 use a regular requirement (ReqType 3), and 362 is one of the
-        // extras with ReqType 2. Option 70 is like Eye Style, where every choice is ReqType 2.
+        // extras with ReqType 2. Option 80 is like the Skyborne's skin: an extra is listed first, so it was
+        // the default, but character creation offers only 801-802 (9 colors in game, not 39). Option 70 is
+        // like Eye Style, where every choice is ReqType 2, so it keeps them all.
         var t = Tables();
         t.Add(GameTableNames.ChrCustomizationReq, R(("ID", 12), ("ReqType", 2), ("ClassMask", 0), ("OverrideArchive", (sbyte)-1)));
         Choice(t, 362, 19, order: 9, req: 12);
+        Option(t, 80, "Skin Color B", HdModel, order: 8);
+        Choice(t, 800, 80, order: 0, req: 12);
+        Choice(t, 801, 80, order: 1, req: 3);
+        Choice(t, 802, 80, order: 2, req: 3);
         Option(t, 70, "Eye Style", HdModel, order: 7);
         Choice(t, 700, 70, order: 0, req: 12);
         Choice(t, 701, 70, order: 1, req: 12);
         var look = new LookResolver(t).Resolve(Orc, Male, Warrior, ModelSet.Hd, _ => HdMesh)!;
 
         Assert.Equal([353, 354], look.Options.Single(o => o.OptionId == 19).Choices.Select(c => c.ChoiceId));
+        var b = look.Options.Single(o => o.OptionId == 80);
+        Assert.Equal([801, 802], b.Choices.Select(c => c.ChoiceId));
+        Assert.Equal(801, b.DefaultChoiceId);
         Assert.Equal([700, 701], look.Options.Single(o => o.OptionId == 70).Choices.Select(c => c.ChoiceId));
         Assert.Equal(700, look.Options.Single(o => o.OptionId == 70).DefaultChoiceId);
     }
