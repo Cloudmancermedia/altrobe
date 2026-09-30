@@ -132,6 +132,8 @@ public class McpTests : IAsyncLifetime
         Assert.Equal((8, "sword", "two-hand"), (claymore["itemId"]!.GetValue<int>(), claymore["weapon"]!.GetValue<string>(), claymore["hands"]!.GetValue<string>()));
         var outfit = JsonNode.Parse(Text(await client.CallToolAsync("build_outfit", new Dictionary<string, object?> { ["level"] = 32, ["weapons"] = new[] { "sword" }, ["hands"] = "two-hand" }, cancellationToken: Ct)))!;
         Assert.Equal(8, outfit["items"]!["mainhand"]!["itemId"]!.GetValue<int>());
+        var bad = await client.CallToolAsync("build_outfit", new Dictionary<string, object?> { ["level"] = 32, ["hands"] = "both" }, cancellationToken: Ct);
+        Assert.Contains("ranged", Text(bad)); // ranged is one of the accepted values
     }
 
     [Fact]
@@ -246,6 +248,30 @@ public class McpTests : IAsyncLifetime
         var r = await (await Client()).CallToolAsync("set_view", new Dictionary<string, object?> { ["view"] = "top" }, cancellationToken: Ct);
         Assert.True(r.IsError);
         Assert.Contains("unknown view", Text(r));
+    }
+
+    [Fact]
+    public async Task APageOnAnotherLocalPortCannotTakeTheSession()
+    {
+        var ws = _app.Server.CreateWebSocketClient();
+        ws.ConfigureRequest = req => req.Headers.Origin = "http://localhost:3000";
+        await Assert.ThrowsAnyAsync<Exception>(() => ws.ConnectAsync(new Uri("ws://127.0.0.1:5161/api/v1/session"), Ct));
+        var r = new HttpRequestMessage(HttpMethod.Get, "/api/v1/status");
+        r.Headers.Add("Origin", "http://127.0.0.1:3000");
+        Assert.Equal(System.Net.HttpStatusCode.Forbidden, (await _app.Local().SendAsync(r)).StatusCode);
+    }
+
+    [Fact]
+    public async Task ACommandWaitingOnAReplacedTabFailsAtOnce()
+    {
+        using var first = await Tab(_ => { Thread.Sleep(Timeout.Infinite); return new JsonObject(); });
+        var client = await Client();
+        var call = client.CallToolAsync("get_look", cancellationToken: Ct).AsTask();
+        await Task.Delay(300);
+        using var second = await Tab(_ => new JsonObject { ["ok"] = true, ["result"] = new JsonObject() });
+        var done = await Task.WhenAny(call, Task.Delay(TimeSpan.FromSeconds(10)));
+        Assert.Same(call, done); // not the 30 s timeout
+        Assert.Contains("Another Altrobe tab took over", Text(await call));
     }
 
     [Fact]

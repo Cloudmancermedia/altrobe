@@ -31,10 +31,11 @@ files are converted again on the next request.
 
 - The server binds to 127.0.0.1 only.
 - It refuses any request whose `Host` header is not `localhost` or `127.0.0.1`, which stops DNS
-  rebinding, and any request with a cross-site `Origin`. It sends no CORS headers.
+  rebinding, and any request whose `Origin` is not this server. It sends no CORS headers.
 - `POST /api/v1/install` needs an `application/json` body, so a plain cross-site form cannot call it.
-- The same Host and Origin checks cover `/mcp` and the tab's WebSocket, so a web page cannot send
-  commands. Any program on the same computer can, as with the rest of the API.
+- An `Origin` header must be `localhost` or `127.0.0.1` on the server's own port, so a page served
+  elsewhere, including another local port, cannot call the API, `/mcp` or the tab's WebSocket. Any
+  program on the same computer that sends no `Origin` can, as with the rest of the API.
 
 ## API
 
