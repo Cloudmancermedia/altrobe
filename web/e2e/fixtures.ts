@@ -2,8 +2,16 @@ import { test as base, expect, type JSHandle, type Page } from '@playwright/test
 
 /** window.__altrobe from src/test-hooks.ts, as far as the checks use it. */
 export interface Hooks {
-  store: { get(): { characters: { races: { race: number; name: string; sexes: { sex: number; hd: boolean; sd: boolean }[] }[] } | null; notices: Record<string, string[]> } }
+  store: { get(): {
+    characters: { races: { race: number; name: string; sexes: { sex: number; hd: boolean; sd: boolean }[] }[] } | null
+    notices: Record<string, string[]>
+    options: { optionId: number; name: string; defaultChoiceId: number | null; choices: { choiceId: number }[] }[]
+    look: { custom: Record<string, number> }
+  } }
   commands: {
+    set_customization(optionId: number, choiceId: number): { error?: string }
+    randomize_customization(): { error?: string }
+    reset_customization(): { error?: string }
     set_character(race: number, sex: number, models?: string): { error?: string }
     equip_item(slot: string, itemId: number): { error?: string }
     compare(list: { race: number; sex: number; models?: string }[]): { error?: string }
@@ -12,6 +20,7 @@ export interface Hooks {
   }
   setTime(t: number): void
   nodeWorld(i: number, name: string): number[] | null
+  drawn(i: number): { geosets: number[]; layerFiles: number[] }
   attached(i: number): { itemId: number; attachmentId: number; rootName: string }[]
   itemNodesLocal(i: number, rootName: string): Record<string, number[]> | null
 }

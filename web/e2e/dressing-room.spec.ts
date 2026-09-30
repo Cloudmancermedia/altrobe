@@ -94,6 +94,44 @@ test('side by side shows a second character in the same outfit', async ({ page }
   expect(await call(page, (h, n) => h.nodeWorld(1, n), HEAD)).not.toBeNull()
 })
 
+test('customization choices are drawn, and the Randomize and Reset buttons change them', async ({ page }) => {
+  await openApp(page)
+  await call(page, (h) => h.commands.set_character(2, 0, 'hd'))
+  await settled(page, 1, (h) => h.store.get().options.length > 0)
+  const before = await call(page, (h) => h.drawn(0))
+  // A skin color that is not the default changes the composited skin; a hair style changes geosets.
+  const pick = await call(page, (h) => {
+    const byName = (n: string) => h.store.get().options.find((o) => o.name === n)!
+    const other = (n: string) => { const o = byName(n); return { optionId: o.optionId, choiceId: o.choices.find((c) => c.choiceId !== o.defaultChoiceId)!.choiceId } }
+    return { skin: other('Skin Color'), hair: other('Hair Style') }
+  })
+  expect(await call(page, (h, p) => h.commands.set_customization(p.optionId, p.choiceId), pick.skin)).not.toHaveProperty('error')
+  expect(await call(page, (h, p) => h.commands.set_customization(p.optionId, p.choiceId), pick.hair)).not.toHaveProperty('error')
+  await settled(page, 1, (h, files) => h.drawn(0).layerFiles.join() !== files, before.layerFiles.join())
+  const after = await call(page, (h) => h.drawn(0))
+  expect(after.geosets).not.toEqual(before.geosets)
+
+  await page.getByRole('button', { name: 'Reset to defaults' }).click()
+  await settled(page, 1, (h, files) => h.drawn(0).layerFiles.join() === files, before.layerFiles.join())
+  expect(await call(page, (h) => h.drawn(0).geosets)).toEqual(before.geosets)
+
+  await page.getByRole('button', { name: 'Randomize' }).click()
+  const custom = await call(page, (h) => h.store.get().look.custom)
+  expect(Object.keys(custom).length).toBeGreaterThan(0)
+})
+
+test('the Sets tab equips every piece of a set in one click', async ({ page }) => {
+  await openApp(page)
+  const panel = page.getByRole('region', { name: 'Find items' })
+  await panel.getByRole('radio', { name: 'sets' }).click()
+  await page.getByLabel('Search sets').fill('warlord')
+  const first = page.locator('.results li button').first()
+  await expect(first).toContainText('Warlord')
+  await first.click()
+  await expect(page.getByRole('region', { name: 'Equipped' }).locator('.slots li')).toHaveCount(6)
+  await settled(page, 1)
+})
+
 test('an empty search shows a hint; typing finds Thunderfury', async ({ page }) => {
   await openApp(page)
   const panel = page.getByRole('region', { name: 'Find items' })

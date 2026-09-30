@@ -29,6 +29,7 @@ public static class GameTableNames
     public const string ItemDisplayInfo = nameof(ItemDisplayInfo);
     public const string ItemDisplayInfoMaterialRes = nameof(ItemDisplayInfoMaterialRes);
     public const string ItemModifiedAppearance = nameof(ItemModifiedAppearance);
+    public const string ItemSet = nameof(ItemSet);
     public const string ItemSparse = nameof(ItemSparse);
     public const string ModelFileData = nameof(ModelFileData);
     public const string TextureFileData = nameof(TextureFileData);
@@ -40,6 +41,6 @@ public static class GameTableNames
         ChrCustomizationOption, ChrCustomizationReq, ChrModel, ChrModelAltVariant, ChrModelMaterial,
         ChrModelTextureLayer, ChrRaceXChrModel, ChrRaces, ComponentModelFileData, ComponentTextureFileData,
         CreatureDisplayInfo, CreatureModelData, HelmetGeosetData, Item, ItemAppearance, ItemDisplayInfo,
-        ItemDisplayInfoMaterialRes, ItemModifiedAppearance, ItemSparse, ModelFileData, TextureFileData,
+        ItemDisplayInfoMaterialRes, ItemModifiedAppearance, ItemSet, ItemSparse, ModelFileData, TextureFileData,
     ];
 }

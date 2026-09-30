@@ -1,6 +1,6 @@
 // Every request the app makes to the local server goes through this module.
 import type {
-  ApiErrorBody, BaseLook, CharactersResponse, InstallRequest, ItemSearchQuery, ItemSearchResult,
+  ApiErrorBody, BaseLook, CharactersResponse, InstallRequest, ItemSearchQuery, ItemSearchResult, ItemSetResult,
   ModelSet, ResolvedItem, Status,
 } from './types'
 
@@ -62,6 +62,12 @@ export function searchItems(query: ItemSearchQuery, signal?: AbortSignal) {
   const p = new URLSearchParams()
   for (const [k, v] of Object.entries(query)) if (v !== undefined && v !== '') p.set(k, String(v))
   return request<ItemSearchResult[]>(`/items/search?${p}`, { signal })
+}
+
+export function searchSets(query: { q?: string; limit?: number; offset?: number }, signal?: AbortSignal) {
+  const p = new URLSearchParams()
+  for (const [k, v] of Object.entries(query)) if (v !== undefined && v !== '') p.set(k, String(v))
+  return request<ItemSetResult[]>(`/sets/search?${p}`, { signal })
 }
 
 export const modelUrl = (build: string, fdid: number, ext: 'glb' | 'json') =>

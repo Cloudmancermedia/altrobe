@@ -24,13 +24,25 @@ export function ComparePanel({ characters, look }: { characters: CharactersRespo
   return (
     <section className="panel" aria-labelledby="compare-heading">
       <h2 id="compare-heading">Side by side</h2>
-      <p className="muted small">The same outfit on up to {MAX_COMPARE + 1} characters. Extra characters use default customizations.</p>
+      <p className="muted small">Up to {MAX_COMPARE + 1} characters. Each wears the main outfit unless Claude gave it its own.</p>
       <ol className="compare-list">
         <li className="muted small">{characterLabel(characters, look.race, look.sex, look.models)} (main)</li>
         {look.compare.map((c, i) => (
           <li key={i}>
+            {(c.label || c.items) && (
+              <p className="small compare-own">
+                {c.label && <strong>{c.label}</strong>}
+                {c.items && <> {c.label ? '· ' : ''}own outfit ({Object.keys(c.items).length} items){' '}
+                  <button type="button" className="link" onClick={() => commands.wear_main_outfit(i)}>Wear the main outfit</button></>}
+              </p>
+            )}
             <CharacterPicker characters={characters} race={c.race} sex={c.sex} models={c.models} idPrefix={`cmp${i}`}
-              onChange={(race, sex, models) => commands.compare(look.compare.map((x, j) => (j === i ? { race, sex, models } : x)))} />
+              onChange={(race, sex, models) => commands.compare(look.compare.map((x, j) => {
+                if (j !== i) return x
+                // Customization choices belong to one body model, so they do not carry over.
+                const same = x.race === race && x.sex === sex && x.models === models
+                return { ...x, race, sex, models, custom: same ? x.custom : undefined }
+              }))} />
             <button type="button" onClick={() => commands.compare(look.compare.filter((_, j) => j !== i))}
               aria-label={`Remove ${characterLabel(characters, c.race, c.sex, c.models)}`}>Remove</button>
           </li>

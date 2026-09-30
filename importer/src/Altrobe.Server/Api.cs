@@ -8,11 +8,28 @@ namespace Altrobe.Server;
 
 public static class Api
 {
-    static readonly string AppVersion = typeof(Api).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "0.0.0";
+    // A set as the web app and MCP clients see it: pieces flattened to item fields plus the slot.
+    public static object SetJson(ItemSetInfo s) => new
+    {
+        s.SetId, s.Name, s.Internal, s.Unnamed,
+        pieces = s.Pieces.Select(p => new { p.Slot, p.Item.ItemId, p.Item.Name, p.Item.Quality, p.Item.IconFileDataId, p.Item.Unnamed }),
+        skipped = s.Skipped,
+    };
+
+    public static readonly string AppVersion = typeof(Api).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "0.0.0";
 
     public static void Map(WebApplication app)
     {
         var api = app.MapGroup("/api/v1");
+
+        // The viewer tab's command channel (TabSession). Host and Origin are checked by LocalOnlyMiddleware.
+        api.Map("/session", async (HttpContext ctx, TabSession tab) =>
+        {
+            if (!ctx.WebSockets.IsWebSocketRequest) return ApiErrors.BadRequest("Connect with a WebSocket.");
+            using var ws = await ctx.WebSockets.AcceptWebSocketAsync();
+            await tab.RunAsync(ws, ctx.RequestAborted);
+            return Results.Empty;
+        });
 
         api.MapGet("/status", (IInstallSource installs, AppState state, ServerSettings settings) => Results.Json(Status(installs, state, settings)));
 
@@ -83,6 +100,16 @@ public static class Api
                 : Results.Json(look);
         });
 
+        api.MapGet("/sets/search", (HttpRequest req, HttpResponse res, AppState state) =>
+        {
+            if (state.Current is not { } sel) return ApiErrors.NoInstall();
+            if (!TryInt(req.Query["limit"], 20, out var limit) || !TryInt(req.Query["offset"], 0, out var offset)) return ApiErrors.BadRequest("limit and offset must be numbers.");
+            // The search panel lists dev and NPC sets too, last; MCP tools leave them out (McpTools).
+            var page = sel.Session.Sets.Search(new SetQuery(req.Query["q"], limit, offset, IncludeInternal: true));
+            res.Headers["X-Total-Count"] = page.Total.ToString();
+            return Results.Json(page.Sets.Select(SetJson));
+        });
+
         api.MapGet("/items/search", (HttpRequest req, HttpResponse res, AppState state) =>
         {
             if (state.Current is not { } sel) return ApiErrors.NoInstall();
@@ -94,7 +121,8 @@ public static class Api
                 if (!int.TryParse(part, out var v)) return ApiErrors.BadRequest("quality must be a number or a comma-separated list.");
                 qualities.Add(v);
             }
-            var page = sel.Session.Items.Search(new ItemQuery(q["q"], Split(q["slot"]).ToList(), qualities, limit, offset));
+            // The search panel lists dev and NPC items too, last; MCP tools leave them out (McpTools).
+            var page = sel.Session.Items.Search(new ItemQuery(q["q"], Split(q["slot"]).ToList(), qualities, limit, offset, IncludeInternal: true));
             res.Headers["X-Total-Count"] = page.Total.ToString();
             return Results.Json(page.Items);
         });
@@ -108,7 +136,8 @@ public static class Api
             if (ParseModelSet(req.Query["models"]) is not { } set) return ApiErrors.BadRequest("models must be hd or sd.");
 
             var r = sel.Session.ResolveItem(id, race, int.Parse(s[0]!), set);
-            if (r.Error == null) return Results.Json(r);
+            // An item with a model but no ItemSparse row goes by the name the catalog made for it.
+            if (r.Error == null) return Results.Json(sel.Session.Items.Get(id) is { Unnamed: true } unnamed ? r with { Name = unnamed.Name } : r);
             return r.Name == "(no ItemSparse row)"
                 ? ApiErrors.NotFound("item_not_found", $"Item {id} is not in this build.")
                 : ApiErrors.NotFound("no_visual", $"Item {id} ({r.Name}) has no visual: {r.Error}.");

@@ -17,10 +17,14 @@ export default defineConfig(async ({ command }) => {
   // The server rejects cross-site Origin headers, and the dev page is a different origin, so the
   // proxy drops the header; Host stays localhost, which the server accepts.
   const api = command === 'serve' ? process.env.ALTROBE_API : undefined
+  // `ws` also carries the viewer tab's command channel (/api/v1/session).
   const toServer = api && {
     target: api,
-    configure: (proxy: { on: (e: 'proxyReq', f: (req: { removeHeader: (h: string) => void }) => void) => void }) =>
-      proxy.on('proxyReq', req => req.removeHeader('origin')),
+    ws: true,
+    configure: (proxy: { on: (e: 'proxyReq' | 'proxyReqWs', f: (req: { removeHeader: (h: string) => void }) => void) => void }) => {
+      proxy.on('proxyReq', req => req.removeHeader('origin'))
+      proxy.on('proxyReqWs', req => req.removeHeader('origin'))
+    },
   }
   return {
     plugins,

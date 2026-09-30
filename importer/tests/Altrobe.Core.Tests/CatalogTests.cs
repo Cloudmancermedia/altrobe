@@ -45,10 +45,97 @@ public class ItemCatalogTests
     }
 
     [Fact]
+    public void DevAndNpcItemsAreOptInExceptByExactId()
+    {
+        string[] names = ["(DNT) Moonglaive", "Ahn'Qiraj Mace [PH]", "10% Test Speed Boots", "JEFF TEST SWORD", "Unused Feathered Gauntlets",
+            "Monster - Axe, 2H Special NPC (Herod)", "Arcanite Reaper", "Testament of Hope", "Zealot's Robe"];
+        var t = new InMemoryTables();
+        for (var i = 0; i < names.Length; i++)
+        {
+            var id = i + 1;
+            t.Add(GameTableNames.ItemSparse, R(("ID", id), ("Display_lang", names[i]), ("InventoryType", (byte)13), ("OverallQualityID", (byte)2)))
+                .Add(GameTableNames.ItemModifiedAppearance, R(("ID", id), ("ItemID", id), ("ItemAppearanceModifierID", 0), ("OrderIndex", 0), ("ItemAppearanceID", id)))
+                .Add(GameTableNames.ItemAppearance, R(("ID", id), ("ItemDisplayInfoID", id)))
+                .Add(GameTableNames.ItemDisplayInfo, R(("ID", id)));
+        }
+        var catalog = new ItemCatalog(t);
+        // By default only real items ("Testament" is not the word "Test").
+        Assert.Equal(["Arcanite Reaper", "Testament of Hope", "Zealot's Robe"], catalog.Search(new ItemQuery(Limit: 100)).Items.Select(i => i.Name));
+        Assert.Empty(catalog.Search(new ItemQuery("moonglaive")).Items);
+        // Opted in: everything, dev and NPC items last.
+        var all = catalog.Search(new ItemQuery(Limit: 100, IncludeInternal: true)).Items;
+        Assert.Equal(9, all.Count);
+        Assert.All(all.Take(3), i => Assert.False(i.Internal));
+        Assert.All(all.Skip(3), i => Assert.True(i.Internal));
+        // An exact item ID always finds the item, and Get always returns it.
+        Assert.Equal("(DNT) Moonglaive", catalog.Search(new ItemQuery("1")).Items.Single().Name);
+        Assert.True(catalog.Get(1)!.Internal);
+    }
+
+    [Fact]
+    public void ItemsWithAModelButNoNameAreListedByTheirSetAndSlot()
+    {
+        // 20 and 21 have Item and appearance rows but no ItemSparse row; 20 is in a set, 21 is not.
+        var t = new InMemoryTables()
+            .Add(GameTableNames.ItemSparse, R(("ID", 1), ("Display_lang", "Robe of the Archmage"), ("InventoryType", (byte)20), ("OverallQualityID", (byte)4)))
+            .Add(GameTableNames.Item, R(("ID", 1), ("InventoryType", (byte)20), ("IconFileDataID", 1001)),
+                R(("ID", 20), ("InventoryType", (byte)5), ("IconFileDataID", 1020)), R(("ID", 21), ("InventoryType", (byte)7), ("IconFileDataID", 1021)),
+                R(("ID", 22), ("InventoryType", (byte)11)))
+            .Add(GameTableNames.ItemSet, R(("ID", 218), ("Name_lang", "Battlegear of Wrath"), ("ItemID", new[] { 20, 0 })));
+        foreach (var id in new[] { 1, 20, 21, 22 })
+            t.Add(GameTableNames.ItemModifiedAppearance, R(("ID", id), ("ItemID", id), ("ItemAppearanceModifierID", 0), ("OrderIndex", 0), ("ItemAppearanceID", id)))
+                .Add(GameTableNames.ItemAppearance, R(("ID", id), ("ItemDisplayInfoID", id)))
+                .Add(GameTableNames.ItemDisplayInfo, R(("ID", id)));
+        var catalog = new ItemCatalog(t);
+
+        var all = catalog.Search(new ItemQuery(Limit: 100)).Items;
+        // Named items first; a ring (22) is not worn, so it is left out.
+        Assert.Equal([1, 20, 21], all.Select(i => i.ItemId));
+        var wrath = catalog.Get(20)!;
+        Assert.Equal(("Battlegear of Wrath: chest", "chest", ItemCatalog.UnknownQuality, 1020, true), (wrath.Name, wrath.Slot, wrath.Quality, wrath.IconFileDataId, wrath.Unnamed));
+        Assert.Equal("Unnamed legs (item 21)", catalog.Get(21)!.Name);
+        Assert.Equal([20], catalog.Search(new ItemQuery("wrath")).Items.Select(i => i.ItemId));
+        Assert.False(catalog.Get(1)!.Unnamed);
+    }
+
+    [Fact]
+    public void FiltersByRequiredLevelArmorTypeAndClass()
+    {
+        // (id, name, inventory type, armor subclass, required level, item level, class mask)
+        var rows = new[] {
+            (1, "Frayed Robe", 20, 1, 5, 8, -1), (2, "Robe of the Archmage", 20, 1, 57, 62, 1 << 7), (3, "Wolf Rider's Leggings", 7, 2, 27, 32, -1),
+            (4, "Chain Hauberk", 5, 3, 30, 35, -1), (5, "Warlord's Plate Armor", 5, 4, 60, 74, 1), (6, "Sword of Might", 13, 0, 31, 36, -1) };
+        var t = new InMemoryTables();
+        foreach (var (id, name, inv, sub, req, ilvl, mask) in rows)
+            t.Add(GameTableNames.ItemSparse, R(("ID", id), ("Display_lang", name), ("InventoryType", (byte)inv), ("OverallQualityID", (byte)2),
+                    ("RequiredLevel", req), ("ItemLevel", ilvl), ("AllowableClass", mask)))
+                .Add(GameTableNames.Item, R(("ID", id), ("InventoryType", (byte)inv), ("ClassID", id == 6 ? 2 : 4), ("SubclassID", sub)))
+                .Add(GameTableNames.ItemModifiedAppearance, R(("ID", id), ("ItemID", id), ("ItemAppearanceModifierID", 0), ("OrderIndex", 0), ("ItemAppearanceID", id)))
+                .Add(GameTableNames.ItemAppearance, R(("ID", id), ("ItemDisplayInfoID", id)))
+                .Add(GameTableNames.ItemDisplayInfo, R(("ID", id)));
+        var c = new ItemCatalog(t);
+        int[] Ids(ItemQuery q) => c.Search(q).Items.Select(i => i.ItemId).Order().ToArray();
+
+        Assert.Equal([3, 4, 6], Ids(new ItemQuery(MinLevel: 25, MaxLevel: 35)));
+        Assert.Equal([3], Ids(new ItemQuery(MinLevel: 25, MaxLevel: 35, Armor: ["leather"])));
+        Assert.Equal([3, 4], Ids(new ItemQuery(Armor: ["leather", "mail"])));
+        // A warrior (class 1) can use item 5 but not the mage-only robe.
+        Assert.Equal([1, 3, 4, 5, 6], Ids(new ItemQuery(ClassId: 1)));
+        Assert.Equal([1, 2, 3, 4, 6], Ids(new ItemQuery(ClassId: 8)));
+        var robe = c.Get(2)!;
+        Assert.Equal((57, 62, "cloth"), (robe.RequiredLevel, robe.ItemLevel, robe.Armor));
+        Assert.Null(c.Get(6)!.Armor);
+        // Item 6 is ClassID 2 subclass 0 (axe) with inventory type 13 (one-hand).
+        Assert.Equal(("axe", "one-hand"), (c.Get(6)!.Weapon, c.Get(6)!.Hands));
+        Assert.Equal([6], Ids(new ItemQuery(Weapons: ["axe"])));
+        Assert.Equal([6], Ids(new ItemQuery(Hands: ["one-hand"])));
+    }
+
+    [Fact]
     public void CarriesSlotQualityAndIcon()
     {
         var thunderfury = Catalog().Search(new ItemQuery("THUNDERfury")).Items.Single();
-        Assert.Equal(new ItemSummary(2, "Thunderfury, Blessed Blade of the Windseeker", "mainhand", 13, 5, 1002), thunderfury);
+        Assert.Equal((2, "Thunderfury, Blessed Blade of the Windseeker", "mainhand", 13, 5, 1002), (thunderfury.ItemId, thunderfury.Name, thunderfury.Slot, thunderfury.InventoryType, thunderfury.Quality, thunderfury.IconFileDataId));
     }
 
     [Fact]

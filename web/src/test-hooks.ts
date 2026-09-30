@@ -29,6 +29,7 @@ export function installTestHooks(stage: () => Stage | null) {
       const node = view(i).root.getObjectByName(name)
       return node ? node.getWorldPosition(new THREE.Vector3()).toArray() : null
     },
+    drawn: (i: number) => view(i).drawn,
     attached: (i: number) => view(i).attached.map((a) => ({ itemId: a.itemId, attachmentId: a.attachmentId, rootName: a.rootName })),
     /** Each attached item node's matrix in the item root's own space, so body motion cancels out. */
     itemNodesLocal(i: number, rootName: string) {

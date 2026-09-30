@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import type { CharactersResponse, ItemSearchResult } from './api/types'
+import type { CharactersResponse, CustomizationOption, ItemSearchResult } from './api/types'
 import { createCommands, transitions } from './commands'
 import { decodeLook, emptyLook } from './look/look'
 import { createStore, initialState } from './store'
@@ -26,10 +26,28 @@ describe('transitions', () => {
     expect(bare.items, 'input is not mutated').toEqual({})
   })
 
+  test('equip_items puts several items on in one change and keeps other slots', () => {
+    const start = transitions.equipItem(bare, 'feet', 7).look!
+    const r = transitions.equipItems(start, [{ slot: 'chest', itemId: 1 }, { slot: 'mainhand', itemId: 2 }]).look!
+    expect(r.items).toEqual({ feet: 7, chest: 1, mainhand: 2 })
+    expect(transitions.equipItems(bare, [{ slot: 'ring', itemId: 1 }]).error).toMatch(/unknown slot "ring"/)
+    expect(transitions.equipItems(bare, []).error).toMatch(/no items/)
+  })
+
   test('equip rejects unknown slots and bad IDs', () => {
     expect(transitions.equipItem(bare, 'ring', 1).error).toMatch(/unknown slot/)
     expect(transitions.equipItem(bare, 'head', -1).error).toMatch(/not an item ID/)
     expect(transitions.equipItem(bare, 'head', 1.5).error).toMatch(/not an item ID/)
+  })
+
+  test('compare characters can carry their own outfit and label', () => {
+    const r = transitions.compare(bare, [{ race: 2, sex: 0, label: 'Level 30', items: { chest: 4071 }, custom: { 20: 390 } }], characters).look!
+    expect(r.compare).toEqual([{ race: 2, sex: 0, models: 'hd', label: 'Level 30', items: { chest: 4071 }, custom: { 20: 390 } }])
+    expect(transitions.compare(bare, [{ race: 2, sex: 0, items: { ring: 1 } }]).error).toMatch(/unknown slot "ring"/)
+    expect(transitions.compare(bare, [{ race: 2, sex: 0, items: { chest: -1 } }]).error).toMatch(/not an item ID/)
+    const main = transitions.wearMainOutfit(r, 0).look!
+    expect(main.compare).toEqual([{ race: 2, sex: 0, models: 'hd', label: 'Level 30', custom: { 20: 390 } }])
+    expect(transitions.wearMainOutfit(r, 3).error).toMatch(/no side-by-side character 4/)
   })
 
   test('set_visibility toggles without duplicates', () => {
@@ -62,11 +80,29 @@ describe('transitions', () => {
     expect(transitions.setCustomization(bare, 0, 390).error).toBeDefined()
   })
 
-  test('compare sets up to three extra characters, in order', () => {
+  const options: CustomizationOption[] = [
+    { optionId: 19, name: 'Skin Color', defaultChoiceId: 353, choices: [{ choiceId: 353, name: '' }, { choiceId: 354, name: '' }] },
+    { optionId: 20, name: 'Face', defaultChoiceId: 384, choices: [{ choiceId: 384, name: '' }, { choiceId: 390, name: '' }] },
+  ]
+
+  test('set_customization checks the choice against the options when they are known', () => {
+    expect(transitions.setCustomization(bare, 20, 390, options).look!.custom).toEqual({ 20: 390 })
+    expect(transitions.setCustomization(bare, 20, 999, options).error).toMatch(/Face has no choice 999/)
+    expect(transitions.setCustomization(bare, 7, 1, options).error).toMatch(/no customization option 7/)
+  })
+
+  test('randomize picks a choice for every option; reset clears them', () => {
+    const r = transitions.randomizeCustomization(bare, options, () => 0.99).look!
+    expect(r.custom).toEqual({ 19: 354, 20: 390 })
+    expect(transitions.randomizeCustomization(bare, []).error).toMatch(/no customization options/)
+    expect(transitions.resetCustomization(r).look!.custom).toEqual({})
+  })
+
+  test('compare sets up to five extra characters, in order', () => {
     const r = transitions.compare(bare, [{ race: 5, sex: 1, models: 'sd' }, { race: 2, sex: 1 }], characters).look!
     expect(r.compare).toEqual([{ race: 5, sex: 1, models: 'sd' }, { race: 2, sex: 1, models: 'hd' }])
-    const four = Array.from({ length: 4 }, () => ({ race: 2, sex: 0 }))
-    expect(transitions.compare(bare, four).error).toMatch(/at most 4/)
+    const six = Array.from({ length: 6 }, () => ({ race: 2, sex: 0 }))
+    expect(transitions.compare(bare, six).error).toMatch(/at most 6/)
     expect(transitions.compare(bare, [{ race: 2, sex: 1, models: 'sd' }], characters).error).toMatch(/no SD model/)
     expect(transitions.compare(r, []).look!.compare).toEqual([])
   })

@@ -122,7 +122,7 @@ test('a look for a character the server has no data for gets a notice', () => {
 test('checkAgainstData drops items without data or in the wrong slot, and flags build and choices', () => {
   const look = norm({ ...outfitA, items: { head: 12640, chest: 999999, feet: 19019, offhand: 19019 }, custom: { 19: 353, 20: 390, 5: 1 } })
   const resolvedById = new Map([[12640, item(12640, 1)], [19019, item(19019, 13)]])
-  const r = checkAgainstData(look, { build: '1.60.2.1', defaults: { 19: 353, 20: 384 }, resolvedById })
+  const r = checkAgainstData(look, { build: '1.60.2.1', defaults: { 19: 353, 20: 384 }, choices: { 19: [353, 354], 20: [384, 390] }, resolvedById })
   expect(r.look.items).toEqual({ head: 12640, offhand: 19019 }) // one-hander may go in the off hand
   expect(r.look.custom).toEqual({ 20: 390 })
   const text = r.notices.join('\n')
@@ -130,9 +130,20 @@ test('checkAgainstData drops items without data or in the wrong slot, and flags 
   expect(text).toMatch(/dropped chest item 999999: no item data/)
   expect(text).toMatch(/dropped feet item 19019: inventory type 13/)
   expect(text).toMatch(/dropped customization option 5/)
-  expect(text).toMatch(/20=390 kept but not drawn/)
+  expect(text).not.toMatch(/not drawn/)
+  const bad = checkAgainstData(norm({ ...outfitA, custom: { 20: 391 } }), { defaults: { 20: 384 }, choices: { 20: [384, 390] } })
+  expect(bad.look.custom).toEqual({})
+  expect(bad.notices).toEqual(['dropped customization 20=391: not a choice for this character (hd)'])
   expect(look.items.chest, 'input look is not mutated').toBe(999999)
   expect(checkAgainstData(norm(outfitA), { build: '1.60.1.70009' }).notices).toEqual([])
+})
+
+test('checkAgainstData drops the off hand while the main hand holds a two-hander', () => {
+  const look = norm({ ...outfitA, items: { mainhand: 1, offhand: 2 } })
+  const resolvedById = new Map([[1, item(1, 17)], [2, item(2, 14)]])
+  const r = checkAgainstData(look, { resolvedById })
+  expect(r.look.items).toEqual({ mainhand: 1 })
+  expect(r.notices).toEqual(['off hand item 2 not shown: the main hand holds a two-handed weapon'])
 })
 
 test('dressStateFor maps slot names to slot IDs, doubles shoulders and skips hidden slots', () => {
@@ -150,11 +161,33 @@ describe('compare (side by side) addition', () => {
     expect(JSON.parse(canonicalJSON(norm(outfitA))).compare).toBeUndefined()
   })
 
-  test('drops bad entries and anything past three, with notices', () => {
-    const r = normalizeLook({ ...outfitA, compare: [{ race: 5, sex: 1 }, { race: 'x', sex: 0 }, { race: 1, sex: 0, models: 'ultra' }, { race: 3, sex: 0 }, { race: 4, sex: 1 }] })
-    expect(r.look!.compare).toEqual([{ race: 5, sex: 1, models: 'hd' }, { race: 1, sex: 0, models: 'hd' }, { race: 3, sex: 0, models: 'hd' }])
+  test('drops bad entries and anything past five, with notices', () => {
+    const r = normalizeLook({ ...outfitA, compare: [{ race: 5, sex: 1 }, { race: 'x', sex: 0 }, { race: 1, sex: 0, models: 'ultra' }, { race: 3, sex: 0 }, { race: 4, sex: 1 }, { race: 6, sex: 0 }, { race: 7, sex: 0 }, { race: 8, sex: 0 }] })
+    expect(r.look!.compare.map((c) => c.race)).toEqual([5, 1, 3, 4, 6])
     expect(r.notices).toHaveLength(3)
     expect(normalizeLook({ ...outfitA, compare: 'no' }).notices).toEqual(['dropped "compare": not a list'])
+  })
+
+  test('an entry can wear its own outfit, customizations and label', () => {
+    const own = { race: 2, sex: 0, models: 'hd', label: 'Level 30', items: { chest: 4071, ring: 5 }, hide: ['chest'], custom: { 20: 390 } }
+    const r = normalizeLook({ ...outfitA, compare: [own, { race: 5, sex: 1, items: {} }] })
+    expect(r.look!.compare).toEqual([
+      { race: 2, sex: 0, models: 'hd', label: 'Level 30', items: { chest: 4071 }, hide: ['chest'], custom: { 20: 390 } },
+      // An empty "items" is its own (empty) outfit, not the main one.
+      { race: 5, sex: 1, models: 'hd', items: {} },
+    ])
+    expect(r.notices).toEqual(['dropped item in unknown slot "ring"'])
+    const look = r.look!
+    expect(decodeLook(encodeLook(look)).look).toEqual(look)
+    expect(JSON.parse(canonicalJSON(look)).compare).toEqual([
+      { custom: { 20: 390 }, hide: ['chest'], items: { chest: 4071 }, label: 'Level 30', models: 'hd', race: 2, sex: 0 },
+      { items: {}, models: 'hd', race: 5, sex: 1 },
+    ])
+  })
+
+  test('labels are trimmed to 40 characters and blank ones dropped', () => {
+    const r = normalizeLook({ ...outfitA, compare: [{ race: 2, sex: 0, label: '  ' + 'x'.repeat(50) }, { race: 2, sex: 0, label: '   ' }, { race: 2, sex: 0, label: 7 }] })
+    expect(r.look!.compare.map((c) => c.label)).toEqual(['x'.repeat(40), undefined, undefined])
   })
 
   test('a look without compare reads the same as before the addition', () => {

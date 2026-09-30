@@ -129,15 +129,45 @@ public sealed class TestApp : WebApplicationFactory<Program>
             .Add(GameTableNames.CharBaseInfo, R(("ID", 1), ("RaceID", 2), ("ClassID", 1)))
             .Add(GameTableNames.ChrRaceXChrModel, R(("ID", 1), ("ChrRacesID", 2), ("Sex", 0), ("ChrModelID", 3)))
             .Add(GameTableNames.ChrModelAltVariant, R(("ID", 1), ("SourceChrModelID", 3), ("VariantChrModelID", 259)));
-        foreach (var (id, name, invType, quality) in new[] { (1, "Robe of the Archmage", 20, 4), (2, "Thunderfury", 13, 5), (3, "Frostweave Robe", 20, 2), (4, "Plain Robe", 20, 1) })
+        foreach (var (id, name, invType, quality) in new[] { (1, "Robe of the Archmage", 20, 4), (2, "Thunderfury", 13, 5), (3, "Frostweave Robe", 20, 2), (4, "Plain Robe", 20, 1), (5, "(DNT) Test Glaive", 13, 0) })
         {
             t.Add(GameTableNames.ItemSparse, R(("ID", id), ("Display_lang", name), ("InventoryType", (byte)invType), ("OverallQualityID", (byte)quality)));
-            t.Add(GameTableNames.Item, R(("ID", id), ("IconFileDataID", 1000 + id)));
+            t.Add(GameTableNames.Item, id == 2
+                ? R(("ID", id), ("IconFileDataID", 1000 + id), ("InventoryType", (byte)13), ("ClassID", 2), ("SubclassID", 7))
+                : R(("ID", id), ("IconFileDataID", 1000 + id)));
             t.Add(GameTableNames.ItemModifiedAppearance, R(("ID", id), ("ItemID", id), ("ItemAppearanceModifierID", 0), ("OrderIndex", 0), ("ItemAppearanceID", id)));
             t.Add(GameTableNames.ItemAppearance, R(("ID", id), ("ItemDisplayInfoID", 100 + id)));
             t.Add(GameTableNames.ItemDisplayInfo, R(("ID", 100 + id), ("ModelResourcesID", new[] { id == 2 ? 50 : 0, 0 }), ("ModelMaterialResourcesID", new[] { id == 2 ? 60 : 0, 0 }),
                 ("GeosetGroup", new int[6]), ("AttachmentGeosetGroup", new int[6]), ("HelmetGeosetVis", new int[2])));
         }
+        // Thunderfury (2) is a one-handed sword; 8 is a two-handed sword and 9 a shield.
+        foreach (var (id, name, inv, cls, sub) in new[] { (8, "Claymore", 17, 2, 8), (9, "Buckler", 14, 4, 6) })
+        {
+            t.Add(GameTableNames.ItemSparse, R(("ID", id), ("Display_lang", name), ("InventoryType", (byte)inv), ("OverallQualityID", (byte)2),
+                ("RequiredLevel", 30), ("ItemLevel", 35), ("AllowableClass", -1)));
+            t.Add(GameTableNames.Item, R(("ID", id), ("InventoryType", (byte)inv), ("ClassID", cls), ("SubclassID", sub)));
+            t.Add(GameTableNames.ItemModifiedAppearance, R(("ID", id), ("ItemID", id), ("ItemAppearanceModifierID", 0), ("OrderIndex", 0), ("ItemAppearanceID", id)));
+            t.Add(GameTableNames.ItemAppearance, R(("ID", id), ("ItemDisplayInfoID", 100 + id)));
+            t.Add(GameTableNames.ItemDisplayInfo, R(("ID", 100 + id), ("ModelResourcesID", new[] { 0, 0 }), ("ModelMaterialResourcesID", new[] { 0, 0 }),
+                ("GeosetGroup", new int[6]), ("AttachmentGeosetGroup", new int[6]), ("HelmetGeosetVis", new int[2])));
+        }
+        // Item 7: level 30 leather legs.
+        t.Add(GameTableNames.ItemSparse, R(("ID", 7), ("Display_lang", "Wolf Rider's Leggings"), ("InventoryType", (byte)7), ("OverallQualityID", (byte)2),
+            ("RequiredLevel", 30), ("ItemLevel", 35), ("AllowableClass", -1)));
+        t.Add(GameTableNames.Item, R(("ID", 7), ("InventoryType", (byte)7), ("ClassID", 4), ("SubclassID", 2)));
+        t.Add(GameTableNames.ItemModifiedAppearance, R(("ID", 7), ("ItemID", 7), ("ItemAppearanceModifierID", 0), ("OrderIndex", 0), ("ItemAppearanceID", 7)));
+        t.Add(GameTableNames.ItemAppearance, R(("ID", 7), ("ItemDisplayInfoID", 107)));
+        t.Add(GameTableNames.ItemDisplayInfo, R(("ID", 107), ("ModelResourcesID", new[] { 0, 0 }), ("ModelMaterialResourcesID", new[] { 0, 0 }),
+            ("GeosetGroup", new int[6]), ("AttachmentGeosetGroup", new int[6]), ("HelmetGeosetVis", new int[2])));
+        // Item 6 has a model but no ItemSparse row, like tier 2 in the Forever beta; set 501 holds it.
+        t.Add(GameTableNames.Item, R(("ID", 6), ("InventoryType", (byte)5), ("IconFileDataID", 1006)));
+        t.Add(GameTableNames.ItemModifiedAppearance, R(("ID", 6), ("ItemID", 6), ("ItemAppearanceModifierID", 0), ("OrderIndex", 0), ("ItemAppearanceID", 6)));
+        t.Add(GameTableNames.ItemAppearance, R(("ID", 6), ("ItemDisplayInfoID", 106)));
+        t.Add(GameTableNames.ItemDisplayInfo, R(("ID", 106), ("ModelResourcesID", new[] { 0, 0 }), ("ModelMaterialResourcesID", new[] { 0, 0 }),
+            ("GeosetGroup", new int[6]), ("AttachmentGeosetGroup", new int[6]), ("HelmetGeosetVis", new int[2])));
+        t.Add(GameTableNames.ItemSet, R(("ID", 501), ("Name_lang", "Battlegear of Wrath"), ("ItemID", new[] { 6, 0 })));
+        // Set 500: a robe, Thunderfury and a second robe that has no free slot.
+        t.Add(GameTableNames.ItemSet, R(("ID", 500), ("Name_lang", "Regalia of the Archmage"), ("ItemID", new[] { 1, 2, 3, 0 })));
         t.Add(GameTableNames.ModelFileData, R(("FileDataID", 148234), ("ModelResourcesID", 50)));
         t.Add(GameTableNames.TextureFileData, R(("FileDataID", 148236), ("MaterialResourcesID", 60), ("UsageType", 0)));
         return t;

@@ -78,6 +78,8 @@ export interface TextureLayer {
   choiceId?: number
   optionId?: number
   materialResourcesId?: number
+  /** On a choice's layers in `options`: the layer applies only while this other choice is active. */
+  relatedChoiceId?: number
   // Set on item layers added by dress().
   itemId?: number
   slot?: number
@@ -104,12 +106,23 @@ export interface LookChoice {
   eligibleChoices?: number
   totalChoices?: number
 }
-/** Proposed: every selectable choice of an option. The spike's looks only carry the default. */
+export interface CustomizationChoice {
+  choiceId: number
+  name: string
+  swatch?: string
+  /** Geosets this choice shows, after the option's own geosets are turned off. */
+  geosets?: number[]
+  /** Texture layers this choice paints. */
+  layers?: TextureLayer[]
+}
+/** Every choice a fresh character can pick for one option. */
 export interface CustomizationOption {
   optionId: number
   name: string
   defaultChoiceId: number | null
-  choices: { choiceId: number; name: string; swatch?: string }[]
+  /** Every geoset any choice of this option names. */
+  geosets?: number[]
+  choices: CustomizationChoice[]
 }
 export interface BaseLook {
   name?: string
@@ -125,6 +138,8 @@ export interface BaseLook {
   layout?: { ID: number; Width: number; Height: number }
   choices: LookChoice[]
   geosets: number[]
+  /** Every geoset in the body mesh. */
+  meshGeosets?: number[]
   geosetsFromChoices?: { optionId: number; choiceId: number; geosets: number[] }[]
   textures: LookTexture[]
   layers: TextureLayer[]
@@ -143,6 +158,29 @@ export interface ItemSearchResult {
   /** ItemSparse.OverallQualityID: 0 poor ... 5 legendary, 6 artifact, 7 heirloom. */
   quality: number
   iconFileDataId: number
+  /** A developer or NPC item, going by its name. Listed after the others. */
+  internal?: boolean
+  /** The build has a model but no name, quality or level for it; `name` is made up from its set and slot. */
+  unnamed?: boolean
+}
+export interface SetPiece {
+  slot: string
+  itemId: number
+  name: string
+  quality: number
+  iconFileDataId: number
+  unnamed?: boolean
+}
+export interface ItemSetResult {
+  setId: number
+  name: string
+  internal: boolean
+  /** Every piece is unnamed in this build (see ItemSearchResult.unnamed). */
+  unnamed?: boolean
+  /** Pieces that can be shown, each with the look slot it goes in. */
+  pieces: SetPiece[]
+  /** Pieces left out: not worn, no visual, or their slot is taken. */
+  skipped: { itemId: number; reason: string }[]
 }
 export interface ItemSearchQuery {
   q?: string

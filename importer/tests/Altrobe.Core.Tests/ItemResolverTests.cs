@@ -64,13 +64,16 @@ public class ItemResolverTests
         // Broken chains.
         t.Add(GameTableNames.ItemSparse, R(("ID", 600), ("Display_lang", "No appearance"), ("InventoryType", 5)));
         Item(t, 700, "No display", inventoryType: 5, display: 7000, modelRes: [0, 0], matRes: [0, 0], addDisplay: false);
+        // A piece with a model but no ItemSparse row, like tier 2 in the Forever beta.
+        Item(t, 800, "unused", inventoryType: 5, display: 8000, modelRes: [0, 0], matRes: [0, 0], sparse: false);
         return t;
     }
 
     static void Item(InMemoryTables t, int id, string name, int inventoryType, int display, int[] modelRes, int[] matRes,
-        int[]? geosetGroup = null, int[]? helmVis = null, bool addDisplay = true)
+        int[]? geosetGroup = null, int[]? helmVis = null, bool addDisplay = true, bool sparse = true)
     {
-        t.Add(GameTableNames.ItemSparse, R(("ID", id), ("Display_lang", name), ("InventoryType", (byte)inventoryType)));
+        if (sparse) t.Add(GameTableNames.ItemSparse, R(("ID", id), ("Display_lang", name), ("InventoryType", (byte)inventoryType)));
+        t.Add(GameTableNames.Item, R(("ID", id), ("InventoryType", (byte)inventoryType)));
         t.Add(GameTableNames.ItemModifiedAppearance,
             R(("ID", id * 10 + 1), ("ItemID", id), ("ItemAppearanceModifierID", 1), ("OrderIndex", 0), ("ItemAppearanceID", 999999)),
             R(("ID", id * 10), ("ItemID", id), ("ItemAppearanceModifierID", 0), ("OrderIndex", 0), ("ItemAppearanceID", id)));
@@ -81,6 +84,14 @@ public class ItemResolverTests
     }
 
     static ResolvedItem Resolve(int itemId, int race, int sex) => new ItemResolver(Tables()).Resolve(itemId, race, sex);
+
+    [Fact]
+    public void AnItemWithoutAnItemSparseRowTakesItsSlotFromItem()
+    {
+        var r = Resolve(800, Orc, Male);
+        Assert.Equal(5, r.InventoryType);
+        Assert.Equal("(no ItemSparse row)", r.Name);
+    }
 
     [Fact]
     public void AWeaponResolvesToANeutralModelAndItsTexture()

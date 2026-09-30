@@ -29,7 +29,22 @@ A look is a small JSON object that names a character and what it wears, by game 
 | `items` | Slot name to item ID. Slots: `head neck shoulder shirt chest waist legs feet wrist hands back mainhand offhand tabard`. |
 | `hide` | Slots whose item is equipped but not drawn. |
 | `cam.view` | `front`, `side`, `back` or `head`. |
-| `compare` | Up to three more characters shown side by side with the same outfit, in screen order. |
+| `compare` | Up to five more characters shown side by side, in screen order. Each wears the main outfit unless it has its own `items`; see below. |
+
+### Side-by-side characters
+
+Each `compare` entry has `race`, `sex` and `models`, and may also have:
+
+| Field | Meaning |
+| --- | --- |
+| `label` | Shown above the character, up to 40 characters, such as `"Level 30"`. |
+| `items` | The character's own outfit, slot name to item ID. Present, even empty, means "wears this"; absent means "wears the main outfit". |
+| `hide` | Hidden slots of the character's own outfit. |
+| `custom` | Customization choices for this character's body model, only those that differ from its defaults. |
+
+```json
+"compare": [{ "race": 2, "sex": 0, "models": "hd", "label": "Level 30", "items": { "chest": 7418, "legs": 7919 } }]
+```
 
 ## Share links
 
@@ -39,8 +54,10 @@ A share link is the app URL plus `#look=` and the base64url encoding of the cano
 
 Reading is forgiving. Unknown fields are ignored, bad entries are dropped, and each drop is reported as a notice in the app. Only a look that cannot be drawn at all fails: not an object, a `v` below 1 or not an integer, another `game`, or no valid race and sex. A look with no `v` is read as v1, and a look with a higher `v` is read as v1 with its unknown fields ignored.
 
-Against the loaded game data, the app also drops items it has no data for, items in a slot their inventory type does not fit (a one-hander may go in `offhand`), and customization options the character does not have. Non-default choices are kept but not drawn yet, and the app says so.
+Against the loaded game data, the app also drops items it has no data for, items in a slot their inventory type does not fit (a one-hander may go in `offhand`), and customization options or choices the character does not have. Each drop comes with a notice.
 
 ## Changes since the spike
 
-`compare` is new. It is optional, so every look the spike wrote reads the same and encodes to the same link, and the version stays at 1. A viewer that does not know `compare` ignores it and shows only the main character. Characters in `compare` use their default customizations, because customization option IDs belong to one body model.
+`compare` is new. It is optional, so every look the spike wrote reads the same and encodes to the same link, and the version stays at 1. A viewer that does not know `compare` ignores it and shows only the main character.
+
+The `compare` entry fields `label`, `items`, `hide` and `custom` came later, with the limit raised from three extra characters to five. They are optional too, so older links read the same. An older viewer ignores them and shows the main outfit on every character, and drops entries past the third.

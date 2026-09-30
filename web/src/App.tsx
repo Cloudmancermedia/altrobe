@@ -12,6 +12,7 @@ import { rememberItems, setNotices, useStore } from './store'
 import type { Stage } from './viewer/stage'
 import { Viewer, type ViewerCell } from './viewer/Viewer'
 import { installTestHooks } from './test-hooks'
+import { connectSession } from './session'
 import './App.css'
 import { foreverChoice, openFailedNotice } from './components/install-choice'
 
@@ -92,6 +93,8 @@ export default function App() {
   const start = useCallback(() => getStatus().then(boot, fail), [boot, fail])
   useEffect(() => { void start() }, [start])
   useEffect(() => installTestHooks(() => stageRef.current), [])
+  // Commands from Claude or another MCP client arrive over the server's session channel.
+  useEffect(() => (phase === 'ready' ? connectSession(commands, store) : undefined), [phase])
 
   // Keep the address bar a share link, so a reload keeps the look. replaceState does not fire
   // hashchange; a pasted or edited link does, and loads that look.
@@ -110,12 +113,16 @@ export default function App() {
 
   const mainBase = useBaseLook(look.race, look.sex, look.models, phase === 'ready')
   useEffect(() => {
-    if (mainBase) store.set({ defaults: defaultsFrom(mainBase) })
+    if (mainBase) store.set({ defaults: defaultsFrom(mainBase), options: mainBase.options ?? [] })
   }, [mainBase])
 
   const cells: ViewerCell[] = useMemo(() => [
     { key: 'main', main: true, spec: { race: look.race, sex: look.sex, models: look.models }, label: characterLabel(characters, look.race, look.sex, look.models) },
-    ...look.compare.map((c, i) => ({ key: `compare${i}`, main: false, spec: c, label: characterLabel(characters, c.race, c.sex, c.models) })),
+    ...look.compare.map((c, i): ViewerCell => ({
+      key: `compare${i}`, main: false, spec: { race: c.race, sex: c.sex, models: c.models }, custom: c.custom,
+      outfit: c.items ? { items: c.items, hide: c.hide ?? [] } : undefined,
+      label: `${c.label ? `${c.label} · ` : ''}${characterLabel(characters, c.race, c.sex, c.models)}`,
+    })),
   ], [look.race, look.sex, look.models, look.compare, characters])
 
   // Drop notices from characters no longer on screen.

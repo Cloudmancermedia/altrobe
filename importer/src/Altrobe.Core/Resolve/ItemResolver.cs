@@ -91,12 +91,13 @@ public sealed class ItemResolver
         [19] = [(0, 12, false)],
     };
 
-    readonly Dictionary<int, Row> _itemSparse, _itemAppearance, _itemDisplayInfo, _componentModel, _componentTexture, _chrRaces;
+    readonly Dictionary<int, Row> _item, _itemSparse, _itemAppearance, _itemDisplayInfo, _componentModel, _componentTexture, _chrRaces;
     readonly Dictionary<int, List<Row>> _imaByItem, _matResByDisplay, _modelFilesByRes, _textureFilesByRes, _helmetGeosetsByVis;
 
     public ItemResolver(ITables t)
     {
         _itemSparse = t.Get(T.ItemSparse).ById();
+        _item = t.Get(T.Item).ById();
         _imaByItem = t.Get(T.ItemModifiedAppearance).GroupByColumn("ItemID");
         _itemAppearance = t.Get(T.ItemAppearance).ById();
         _itemDisplayInfo = t.Get(T.ItemDisplayInfo).ById();
@@ -141,7 +142,8 @@ public sealed class ItemResolver
             ? _helmetGeosetsByVis.Of(helmVis).Where(h => h.Int("RaceID") == raceId || h.Int("RaceID") == 0).Select(h => h.Int("HideGeosetGroup")).Distinct().ToList()
             : [];
 
-        int? inventoryType = sparse?.Int("InventoryType");
+        // Some items have a model but no ItemSparse row (tier 2 in the Forever beta); Item has the slot too.
+        int? inventoryType = sparse?.Int("InventoryType") ?? (_item.TryGetValue(itemId, out var itemRow) ? itemRow.Int("InventoryType") : null);
         int? equipSlot = inventoryType is { } it && InventoryTypeToSlot.TryGetValue(it, out var s) ? s : null;
         var geosetGroup = display.Ints("GeosetGroup");
 

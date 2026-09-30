@@ -120,13 +120,44 @@ public class ApiTests : IClassFixture<ApiTests.Fixture>
     }
 
     [Fact]
+    public async Task TheSearchPanelStillFindsDevItemsMarkedInternal()
+    {
+        var client = await _app.Installed();
+        var item = (await Body(await client.GetAsync("/api/v1/items/search?q=glaive"))).EnumerateArray().Single();
+        Assert.Equal(5, item.GetProperty("itemId").GetInt32());
+        Assert.True(item.GetProperty("internal").GetBoolean());
+    }
+
+    [Fact]
+    public async Task AnUnnamedItemResolvesUnderItsCatalogName()
+    {
+        var client = await _app.Installed();
+        var r = await Body(await client.GetAsync("/api/v1/items/6/resolved?race=2&sex=0&models=hd"));
+        Assert.Equal("Battlegear of Wrath: chest", r.GetProperty("name").GetString());
+        Assert.Equal(5, r.GetProperty("inventoryType").GetInt32());
+    }
+
+    [Fact]
+    public async Task SetSearchListsPiecesWithTheirSlots()
+    {
+        var client = await _app.Installed();
+        var r = await client.GetAsync("/api/v1/sets/search?q=archmage");
+        Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+        Assert.Equal("1", r.Headers.GetValues("X-Total-Count").Single());
+        var set = (await Body(r)).EnumerateArray().Single();
+        Assert.Equal(500, set.GetProperty("setId").GetInt32());
+        Assert.Equal([("chest", 1), ("mainhand", 2)], set.GetProperty("pieces").EnumerateArray().Select(p => (p.GetProperty("slot").GetString()!, p.GetProperty("itemId").GetInt32())));
+        Assert.Equal(3, set.GetProperty("skipped").EnumerateArray().Single().GetProperty("itemId").GetInt32());
+    }
+
+    [Fact]
     public async Task DataEndpointsReturn409UntilAnInstallIsSelected()
     {
         using var app = new TestApp();
         var client = app.Local();
         foreach (var path in new[]
         {
-            "/api/v1/characters", "/api/v1/characters/2/0?models=hd", "/api/v1/items/search?q=robe",
+            "/api/v1/characters", "/api/v1/characters/2/0?models=hd", "/api/v1/items/search?q=robe", "/api/v1/sets/search?q=robe",
             "/api/v1/items/1/resolved?race=2&sex=0", $"/assets/{TestApp.Build}/textures/{TestApp.TextureFdid}.png", $"/assets/{TestApp.Build}/models/1.glb",
         })
             await AssertError(await client.GetAsync(path), HttpStatusCode.Conflict, "no_install");
