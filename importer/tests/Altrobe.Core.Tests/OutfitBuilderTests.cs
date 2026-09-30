@@ -23,6 +23,8 @@ public class OutfitBuilderTests
         (12, "Shortsword 30", 13, 2, 7, 2, 30, 35, -1),  // one-handed sword
         (13, "Wand 30", 26, 2, 19, 2, 30, 35, -1),
         (14, "Buckler 28", 14, 4, 6, 2, 28, 33, -1),     // shield
+        (15, "Longbow 29", 15, 2, 2, 2, 29, 34, -1),     // ranged
+        (16, "Pendant 27", 2, 4, 0, 2, 27, 32, -1),      // neck: no armor type
     ];
 
     static ItemCatalog Catalog()
@@ -68,6 +70,15 @@ public class OutfitBuilderTests
         // A one-hander with a shield fills the off hand; a two-hander never does.
         var sAndB = OutfitBuilder.Build(c, new OutfitRequest(Level: 30, Armor: "mail", Weapons: ["sword"], Hands: "one-hand", OffHand: "shield"));
         Assert.Equal((12, 14), (sAndB.Items["mainhand"].ItemId, sAndB.Items["offhand"].ItemId));
+    }
+
+    [Fact]
+    public void RangedWeaponsFillTheMainHandAndNonArmorSlotsIgnoreTheArmorType()
+    {
+        var c = Catalog();
+        Assert.Equal(15, OutfitBuilder.Build(c, new OutfitRequest(Level: 30, Weapons: ["bow"])).Items["mainhand"].ItemId);
+        Assert.Equal(15, OutfitBuilder.Build(c, new OutfitRequest(Level: 30, Weapons: ["bow"], Hands: "ranged")).Items["mainhand"].ItemId);
+        Assert.Equal(16, OutfitBuilder.Build(c, new OutfitRequest(Level: 30, Armor: "mail", Slots: ["neck"])).Items["neck"].ItemId);
     }
 
     [Fact]

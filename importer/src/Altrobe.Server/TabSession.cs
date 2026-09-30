@@ -31,8 +31,13 @@ public sealed class TabSession(ServerSettings settings, ILogger<TabSession> log)
     public async Task RunAsync(WebSocket ws, CancellationToken ct)
     {
         var previous = Interlocked.Exchange(ref _tab, ws);
-        if (previous is { State: WebSocketState.Open })
-            _ = previous.CloseAsync(Replaced, "another Altrobe tab took over", CancellationToken.None);
+        if (previous != null)
+        {
+            // Commands sent to the old tab will not be answered; fail them now rather than at the timeout.
+            FailPending("Another Altrobe tab took over before this one answered. Try again.");
+            if (previous.State == WebSocketState.Open)
+                _ = previous.CloseAsync(Replaced, "another Altrobe tab took over", CancellationToken.None);
+        }
         log.LogInformation("Viewer tab connected");
         var buffer = new byte[64 * 1024];
         try
@@ -59,9 +64,14 @@ public sealed class TabSession(ServerSettings settings, ILogger<TabSession> log)
             if (Interlocked.CompareExchange(ref _tab, null, ws) == ws)
             {
                 log.LogInformation("Viewer tab disconnected");
-                foreach (var p in _pending.Values) p.TrySetException(new TabException("The Altrobe tab closed before it answered."));
+                FailPending("The Altrobe tab closed before it answered.");
             }
         }
+    }
+
+    void FailPending(string message)
+    {
+        foreach (var p in _pending.Values) p.TrySetException(new TabException(message));
     }
 
     void Receive(string text)
@@ -88,6 +98,11 @@ public sealed class TabSession(ServerSettings settings, ILogger<TabSession> log)
             var bytes = Encoding.UTF8.GetBytes(new JsonObject { ["type"] = "command", ["id"] = id, ["command"] = command, ["args"] = args }.ToJsonString());
             await _send.WaitAsync(ct);
             try { await ws.SendAsync(bytes, WebSocketMessageType.Text, true, ct); }
+            catch (Exception e) when (e is WebSocketException or ObjectDisposedException)
+            {
+                // The tab closed between the check above and the send.
+                throw new TabException($"No Altrobe tab is open. Open Altrobe in the browser (http://127.0.0.1:{settings.Port}/) and try again.");
+            }
             finally { _send.Release(); }
 
             JsonObject reply;

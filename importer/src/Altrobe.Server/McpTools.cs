@@ -109,13 +109,13 @@ public sealed class McpTools(AppState state, TabSession tab)
         [Description("Highest quality")] int max_quality = 5,
         [Description("Armor slots to fill; default head, shoulder, chest, waist, legs, feet, wrist, hands, back")] string[]? slots = null,
         [Description($"Weapon types for the main hand ({WeaponList}); without them the main hand stays empty, because the data does not say which weapons a class can use")] string[]? weapons = null,
-        [Description("Main hand: one-hand or two-hand; default either")] string? hands = null,
+        [Description("Main hand: one-hand, two-hand or ranged (bows, guns, crossbows, wands); default any")] string? hands = null,
         [Description("Off hand: shield or held (an off-hand item); skipped with a two-hander")] string? off_hand = null)
     {
         var a = armor?.Trim().ToLowerInvariant();
         if (a != null && !ItemCatalog.ArmorTypes.Values.Contains(a)) throw new McpException($"Unknown armor type \"{armor}\". Use cloth, leather, mail or plate.");
         var w = weapons is { Length: > 0 } ? List(string.Join(",", weapons), ItemCatalog.WeaponTypes.Values, "weapon type") : null;
-        if (hands is not (null or "one-hand" or "two-hand")) throw new McpException("hands must be one-hand or two-hand.");
+        if (hands is not (null or "one-hand" or "two-hand" or "ranged")) throw new McpException("hands must be one-hand, two-hand or ranged.");
         if (off_hand is not (null or "shield" or "held")) throw new McpException("off_hand must be shield or held.");
         var outfit = OutfitBuilder.Build(Session.Items, new OutfitRequest(level, a, class_id, min_quality, max_quality, slots, w, hands, off_hand));
         return JsonSerializer.Serialize(new

@@ -4,7 +4,7 @@ namespace Altrobe.Server;
 // still carry that domain in Host, so only literal local names are served. Cross-site Origins are
 // refused too; with no CORS headers the browser already blocks reading responses, and this also
 // stops a foreign page from triggering work.
-public sealed class LocalOnlyMiddleware(RequestDelegate next)
+public sealed class LocalOnlyMiddleware(RequestDelegate next, ServerSettings settings)
 {
     public static bool IsLocalHost(string? host) =>
         string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase) || host == "127.0.0.1";
@@ -16,8 +16,10 @@ public sealed class LocalOnlyMiddleware(RequestDelegate next)
             await ApiErrors.Write(ctx, StatusCodes.Status403Forbidden, "forbidden_host", "Requests must use localhost or 127.0.0.1 as the host.");
             return;
         }
+        // The Origin must also be this server's own port: a page served on another local port (another
+        // dev server, any local app) is a different site and must not open the tab's command channel.
         if (ctx.Request.Headers.Origin is { Count: > 0 } origin
-            && !(Uri.TryCreate(origin.ToString(), UriKind.Absolute, out var o) && o.Scheme == Uri.UriSchemeHttp && IsLocalHost(o.Host)))
+            && !(Uri.TryCreate(origin.ToString(), UriKind.Absolute, out var o) && o.Scheme == Uri.UriSchemeHttp && IsLocalHost(o.Host) && o.Port == settings.Port))
         {
             await ApiErrors.Write(ctx, StatusCodes.Status403Forbidden, "forbidden_origin", "Cross-site requests are not allowed.");
             return;
