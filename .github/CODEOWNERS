@@ -1,0 +1,11 @@
+# Pull requests that touch these paths request the maintainer's review. They can reach AWS, CI
+# secrets, releases or the rules that keep game content out of the repository. Add the hosted API, sign-in, limits and prompt check here when
+# they exist.
+
+/.github/                             @Cloudmancermedia
+/infra/                               @Cloudmancermedia
+/packaging/                           @Cloudmancermedia
+/scripts/check-no-game-content.mjs    @Cloudmancermedia
+/scripts/package.mjs                  @Cloudmancermedia
+/docs/deployment.md                   @Cloudmancermedia
+/docs/SECURITY.md                     @Cloudmancermedia

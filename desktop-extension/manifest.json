@@ -1,0 +1,36 @@
+{
+  "manifest_version": "0.3",
+  "name": "altrobe",
+  "display_name": "Altrobe",
+  "version": "0.0.0",
+  "description": "Dress World of Warcraft: Forever characters in Altrobe by asking Claude.",
+  "long_description": "Connects Claude Desktop to the Altrobe app running on this computer. Start Altrobe and open it in your browser, then ask Claude to search items, dress characters and compare races. Claude's changes appear in the open Altrobe tab. Altrobe is a fan project, not affiliated with or endorsed by Blizzard Entertainment.",
+  "author": { "name": "Altrobe contributors", "url": "https://github.com/Cloudmancermedia/altrobe" },
+  "repository": { "type": "git", "url": "https://github.com/Cloudmancermedia/altrobe" },
+  "homepage": "https://github.com/Cloudmancermedia/altrobe",
+  "license": "MIT",
+  "server": {
+    "type": "node",
+    "entry_point": "server/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/index.js"],
+      "env": { "ALTROBE_URL": "http://127.0.0.1:${user_config.port}/mcp" }
+    }
+  },
+  "user_config": {
+    "port": {
+      "type": "number",
+      "title": "Altrobe port",
+      "description": "The port Altrobe listens on. Leave it at 5161 unless you started Altrobe with a different one.",
+      "default": 5161,
+      "required": false,
+      "min": 1024,
+      "max": 65535
+    }
+  },
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": { "node": ">=18.0.0" }
+  }
+}

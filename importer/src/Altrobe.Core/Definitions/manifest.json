@@ -1,0 +1,180 @@
+[
+ {
+  "tableName": "CharBaseInfo",
+  "tableHash": "3067A8F8",
+  "dbcFileDataID": 801593,
+  "db2FileDataID": 1343386
+ },
+ {
+  "tableName": "CharComponentTextureLayouts",
+  "tableHash": "A77C3E7B",
+  "dbcFileDataID": 801594,
+  "db2FileDataID": 1360262
+ },
+ {
+  "tableName": "CharComponentTextureSections",
+  "tableHash": "FAA98CF5",
+  "dbcFileDataID": 801595,
+  "db2FileDataID": 1360263
+ },
+ {
+  "tableName": "CharTitles",
+  "tableHash": "85DF9E8E",
+  "dbcFileDataID": 841628,
+  "db2FileDataID": 1349054
+ },
+ {
+  "tableName": "ChrClasses",
+  "tableHash": "F5889D8C",
+  "dbcFileDataID": 841634,
+  "db2FileDataID": 1361031
+ },
+ {
+  "tableName": "ChrCustomizationChoice",
+  "tableHash": "681D0F3D",
+  "db2FileDataID": 3450554
+ },
+ {
+  "tableName": "ChrCustomizationElement",
+  "tableHash": "D6D051EC",
+  "db2FileDataID": 3512765
+ },
+ {
+  "tableName": "ChrCustomizationGeoset",
+  "tableHash": "59769CB8",
+  "db2FileDataID": 3456171
+ },
+ {
+  "tableName": "ChrCustomizationMaterial",
+  "tableHash": "B58D84F3",
+  "db2FileDataID": 3459652
+ },
+ {
+  "tableName": "ChrCustomizationOption",
+  "tableHash": "2FB7905B",
+  "db2FileDataID": 3384247
+ },
+ {
+  "tableName": "ChrCustomizationReq",
+  "tableHash": "61431A65",
+  "db2FileDataID": 3450453
+ },
+ {
+  "tableName": "ChrModel",
+  "tableHash": "49349C6E",
+  "db2FileDataID": 3384313
+ },
+ {
+  "tableName": "ChrModelAltVariant",
+  "tableHash": "8E636A9B",
+  "db2FileDataID": 8068383
+ },
+ {
+  "tableName": "ChrModelMaterial",
+  "tableHash": "FA82A022",
+  "db2FileDataID": 3566562
+ },
+ {
+  "tableName": "ChrModelTextureLayer",
+  "tableHash": "49F2F8AF",
+  "db2FileDataID": 3548976
+ },
+ {
+  "tableName": "ChrRaces",
+  "tableHash": "53F1783C",
+  "dbcFileDataID": 841613,
+  "db2FileDataID": 1305311
+ },
+ {
+  "tableName": "ChrRaceXChrModel",
+  "tableHash": "A7E150FE",
+  "db2FileDataID": 3490304
+ },
+ {
+  "tableName": "ComponentModelFileData",
+  "tableHash": "BE6AED26",
+  "db2FileDataID": 1349053
+ },
+ {
+  "tableName": "ComponentTextureFileData",
+  "tableHash": "82408B8D",
+  "db2FileDataID": 1278239
+ },
+ {
+  "tableName": "CreatureDisplayInfo",
+  "tableHash": "BFDAF9F1",
+  "dbcFileDataID": 801605,
+  "db2FileDataID": 1108759
+ },
+ {
+  "tableName": "CreatureModelData",
+  "tableHash": "7F695FA5",
+  "dbcFileDataID": 801608,
+  "db2FileDataID": 1365368
+ },
+ {
+  "tableName": "HelmetGeosetData",
+  "tableHash": "240C1F15",
+  "db2FileDataID": 2821752
+ },
+ {
+  "tableName": "Item",
+  "tableHash": "50238EC2",
+  "db2FileDataID": 841626
+ },
+ {
+  "tableName": "ItemAppearance",
+  "tableHash": "42261B89",
+  "db2FileDataID": 982462
+ },
+ {
+  "tableName": "ItemDisplayInfo",
+  "tableHash": "986F8CD0",
+  "dbcFileDataID": 801680,
+  "db2FileDataID": 1266429
+ },
+ {
+  "tableName": "ItemDisplayInfoMaterialRes",
+  "tableHash": "F35AF3DB",
+  "db2FileDataID": 1280614
+ },
+ {
+  "tableName": "ItemModifiedAppearance",
+  "tableHash": "E491AC55",
+  "db2FileDataID": 982457
+ },
+ {
+  "tableName": "ItemSet",
+  "tableHash": "8E741A98",
+  "dbcFileDataID": 841693,
+  "db2FileDataID": 1343609
+ },
+ {
+  "tableName": "ItemSparse",
+  "tableHash": "919BE54E",
+  "db2FileDataID": 1572924
+ },
+ {
+  "tableName": "ItemVisuals",
+  "tableHash": "77F6CC65",
+  "dbcFileDataID": 801690,
+  "db2FileDataID": 1343605
+ },
+ {
+  "tableName": "ModelFileData",
+  "tableHash": "A161E42C",
+  "dbcFileDataID": 986976,
+  "db2FileDataID": 1337833
+ },
+ {
+  "tableName": "NameGen",
+  "tableHash": "F5FA849B",
+  "dbcFileDataID": 801719,
+  "db2FileDataID": 1122117
+ },
+ {
+  "tableName": "TextureFileData",
+  "tableHash": "1A473014",
+  "db2FileDataID": 982459
+ }
+]

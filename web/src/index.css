@@ -1,0 +1,61 @@
+:root {
+  color-scheme: dark;
+  /* Dark blue theme. */
+  --bg: #092132;          /* page background */
+  --panel: #0c3042;       /* panels */
+  --panel-2: #0d4c60;     /* raised panels */
+  --line: #1f5a6e;
+  --text: #e4ebee;
+  --muted: #9bb4bf;
+  --cream: #d0bfa5;       /* headings */
+  --gold: #c6af8d;        /* trim */
+  --forever: #4cafc1;     /* accent */
+  --teal: #01819f;        /* links and focus */
+  /* Player name colors: blue, green when flagged for PvP. */
+  --name-friendly: #7474ff;
+  --name-pvp: #1fe01f;
+  --accent: var(--cream);
+  --warn: #e6b35c;
+  --error: #ef7d6d;
+  --focus: var(--forever);
+  --display: 'Marcellus', Georgia, serif;
+  font: 14px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+* { box-sizing: border-box; }
+html, body, #root { margin: 0; height: 100%; }
+
+input, select, textarea {
+  font: inherit;
+  color: inherit;
+  background: #071a26;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 5px 10px;
+}
+/* Buttons: bevelled bar with gold lettering in a dark frame. */
+button {
+  font: inherit;
+  color: #f3d27a;
+  background: linear-gradient(#2d7fa0, #155873 55%, #0f4760);
+  border: 1px solid #06141d;
+  border-radius: 4px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), inset 0 -1px 0 rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(198, 175, 141, 0.35);
+  padding: 5px 12px;
+  text-shadow: 0 1px 1px #000;
+  cursor: pointer;
+}
+button:hover:not(:disabled) { background: linear-gradient(#3995b8, #1b6886 55%, #135570); color: #ffe08f; }
+button:active:not(:disabled) { background: linear-gradient(#0f4760, #155873); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+input[type='search'], input:not([type]) { min-width: 0; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+h1 { font: 22px var(--display); margin: 0; letter-spacing: 0.03em; color: var(--cream); }
+h2 { font: 14px var(--display); margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--cream); }
+
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+.error { color: var(--error); }

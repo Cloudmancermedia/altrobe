@@ -1,0 +1,92 @@
+name: Deploy
+
+# cdk diff on pull requests and before each deploy; cdk deploy from main behind the production
+# environment's approval. AWS access is through GitHub's OIDC token and the roles in infra/src/ci-stack.ts;
+# no keys are stored. Role ARNs come from repository variables (docs/deployment.md), and both jobs skip
+# until those exist. Never use pull_request_target here.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: deploy-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+  cancel-in-progress: false
+
+jobs:
+  diff:
+    # Fork pull requests get no OIDC token, so they skip.
+    if: vars.AWS_DIFF_ROLE_ARN != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # assumes the read-only diff role
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      # The site stack deploys web/dist-static; build it so the diff shows the real deployment.
+      - name: Build the static web app
+        run: |
+          npm --prefix web ci
+          npm --prefix web run build:static
+        env:
+          VITE_ALTROBE_BUNDLE_URL: https://assets.altrobe.com
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_DIFF_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: cdk diff
+        working-directory: infra
+        run: |
+          npm ci
+          npx cdk diff --all
+        env:
+          # A secret, not a variable, so GitHub masks the address in this public repository's logs.
+          ALTROBE_BUDGET_EMAIL: ${{ secrets.BUDGET_EMAIL }}
+
+  deploy:
+    needs: diff
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.AWS_DEPLOY_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write # assumes the deploy role, which trusts only this environment
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      - name: Build the static web app
+        run: |
+          npm --prefix web ci
+          npm --prefix web run build:static
+        env:
+          VITE_ALTROBE_BUNDLE_URL: https://assets.altrobe.com
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: cdk deploy
+        working-directory: infra
+        run: |
+          npm ci
+          npx cdk deploy --all --require-approval never
+        env:
+          # A secret, not a variable, so GitHub masks the address in this public repository's logs.
+          ALTROBE_BUDGET_EMAIL: ${{ secrets.BUDGET_EMAIL }}

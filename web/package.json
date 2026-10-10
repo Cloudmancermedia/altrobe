@@ -1,0 +1,36 @@
+{
+  "name": "altrobe-web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:spike": "ALTROBE_DEV_ADAPTER=spike vite",
+    "dev:static": "vite --mode static",
+    "build": "tsc -b && vite build",
+    "build:static": "tsc -b && vite build --mode static",
+    "lint": "oxlint",
+    "test": "vitest run",
+    "preview": "vite preview",
+    "test:e2e": "playwright test",
+    "test:e2e:static": "playwright test -c playwright.static.config.ts"
+  },
+  "dependencies": {
+    "@fontsource/marcellus": "^5.3.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@types/three": "^0.186.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "oxlint": "^1.81.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.2"
+  }
+}

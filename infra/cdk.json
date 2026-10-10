@@ -1,0 +1,7 @@
+{
+  "app": "npx tsx src/app.ts",
+  "watch": { "include": ["src/**"] },
+  "context": {
+    "@aws-cdk/core:newStyleStackSynthesis": true
+  }
+}

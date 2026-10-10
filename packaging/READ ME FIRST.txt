@@ -1,0 +1,119 @@
+Altrobe {{version}}
+==================
+
+Altrobe is a dressing room for World of Warcraft: Forever. It runs on your own
+computer and shows your characters and items in your web browser.
+
+You need World of Warcraft: Forever installed on this computer. You do not
+need to install anything else.
+
+
+What it does with your game
+---------------------------
+
+Altrobe reads the game files already on your computer. It never contacts
+Blizzard and never downloads game data. On first start it downloads Classic
+item names from the cmangos classic-db project (about 13 MB). It converts
+models and textures the first time you view them and keeps the results in a
+cache folder:
+
+  Windows:        %LOCALAPPDATA%\Altrobe
+  macOS, Linux:   .altrobe in your home folder
+
+Deleting the cache folder is safe. Altrobe converts the files again when it
+needs them.
+
+The page it opens is served by Altrobe itself at http://127.0.0.1:5161/.
+Nothing outside your computer can reach it.
+
+
+Windows
+-------
+
+1. Unzip the whole folder somewhere, for example your Documents folder.
+2. Double-click Altrobe.exe.
+3. Windows may say "Windows protected your PC". Altrobe is not signed with a
+   paid certificate, so Windows does not recognize it. Click "More info",
+   then "Run anyway".
+4. A black window opens and your browser shows Altrobe.
+
+To stop Altrobe, close the black window.
+
+
+macOS
+-----
+
+1. Unzip the file. Move the folder anywhere you like.
+2. Double-click Altrobe. It opens in a Terminal window.
+3. macOS may say Altrobe "cannot be opened" or that Apple could not check it.
+   Altrobe is not signed or notarized with Apple, which costs money. To open
+   it anyway:
+     - Click Done (not Move to Trash). Open System Settings, then Privacy &
+       Security. Near the bottom it says Altrobe was blocked. Click
+       "Open Anyway", then double-click Altrobe again and click Open.
+     - On macOS 14 and earlier you can instead right-click Altrobe, choose
+       Open, then click Open.
+     - Or, in Terminal, type the line below with a space at the end, drag
+       the unzipped Altrobe folder onto the Terminal window, and press Return:
+         xattr -dr com.apple.quarantine
+4. Your browser shows Altrobe.
+
+To stop Altrobe, close the Terminal window or press Control-C in it.
+
+
+Linux
+-----
+
+Open a terminal in the unzipped folder and run:
+
+  ALTROBE_WOW_PATH="/path/to/World of Warcraft" ./Altrobe
+
+Linux has no standard install folder, so tell Altrobe where the game is. If
+it will not start, run chmod +x Altrobe first. Press Control-C to stop it.
+
+
+Ask Claude to dress characters (Claude Desktop)
+-----------------------------------------------
+
+Download Altrobe-{{version}}.mcpb from the same release page and double-click
+it, or drag it onto Claude Desktop's Settings, Extensions page. Click
+Install. Then start Altrobe, open it in your browser, and ask Claude
+something like "put the Orc in Thunderfury and show the same outfit on an
+Undead female". The changes appear in the open Altrobe tab.
+
+If you start Altrobe with --port, set the same port in the extension's
+settings in Claude Desktop.
+
+
+If Altrobe does not find your game
+----------------------------------
+
+Altrobe looks in these folders:
+
+  Windows:  C:\Program Files (x86)\World of Warcraft
+            C:\Program Files\World of Warcraft
+  macOS:    /Applications/World of Warcraft
+
+If your game is somewhere else, set ALTROBE_WOW_PATH to its folder before
+you start Altrobe. On Windows, open Command Prompt in the Altrobe folder and
+run:
+
+  set ALTROBE_WOW_PATH=D:\Games\World of Warcraft
+  Altrobe.exe
+
+If port 5161 is in use, start Altrobe with --port and another number, for
+example: Altrobe.exe --port 5300
+
+
+More
+----
+
+Source code, help and new versions: https://github.com/Cloudmancermedia/altrobe
+
+Altrobe is free software under the MIT License (see LICENSE). The license
+covers Altrobe's code only. It gives no rights to Blizzard's game content.
+THIRD_PARTY_NOTICES.md lists the open-source software included in it.
+
+Altrobe is a fan project. It is not affiliated with or endorsed by Blizzard
+Entertainment. World of Warcraft and World of Warcraft: Forever are
+trademarks of Blizzard Entertainment, Inc.

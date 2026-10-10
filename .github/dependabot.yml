@@ -1,0 +1,28 @@
+# Weekly dependency updates, one pull request per ecosystem and folder. Security updates are a
+# separate repository setting; see docs/deployment.md.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directories: ["/web", "/infra", "/desktop-extension"]
+    schedule:
+      interval: weekly
+    groups:
+      npm:
+        patterns: ["*"]
+
+  - package-ecosystem: nuget
+    directories: ["/importer/src/*", "/importer/tests/*"]
+    schedule:
+      interval: weekly
+    groups:
+      nuget:
+        patterns: ["*"]
+
+  # Keeps the SHA-pinned actions current.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

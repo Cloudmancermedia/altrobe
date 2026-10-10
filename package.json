@@ -1,0 +1,20 @@
+{
+  "name": "altrobe",
+  "private": true,
+  "description": "Developer scripts: start, dev and test the local server and web app together.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node scripts/start.mjs",
+    "dev": "node scripts/dev.mjs",
+    "test": "node scripts/setup.mjs && node scripts/check-no-game-content.mjs && node --test scripts/lib.test.mjs && dotnet test importer && npm --prefix web run lint && npm --prefix web test && npm --prefix desktop-extension test",
+    "check:content": "node scripts/check-no-game-content.mjs",
+    "package": "node scripts/package.mjs",
+    "smoke:package": "node scripts/smoke-package.mjs",
+    "package:desktop": "node scripts/package-desktop.mjs",
+    "publish:bundle": "node scripts/publish-bundle.mjs"
+  }
+}

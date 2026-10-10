@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    # The browser checks (web/e2e) need a real game install, so CI does not run them.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            rid: linux-x64
+          - os: macos-latest
+            rid: osx-arm64
+          - os: windows-latest
+            rid: win-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.x
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            desktop-extension/package-lock.json
+
+      - name: No game content in tracked files
+        run: node scripts/check-no-game-content.mjs
+
+      - name: Script helper tests
+        run: node --test scripts/lib.test.mjs
+
+      - name: Build the server
+        run: dotnet build importer
+
+      - name: Server tests
+        run: dotnet test importer --no-build
+
+      - name: Install web dependencies
+        run: npm --prefix web ci
+
+      - name: Lint the web app
+        run: npm --prefix web run lint
+
+      - name: Web unit tests
+        run: npm --prefix web test
+
+      - name: Install Claude Desktop extension dependencies
+        run: npm --prefix desktop-extension ci
+
+      - name: Claude Desktop bridge tests
+        run: npm --prefix desktop-extension test
+
+      # Builds the web app too. The smoke test proves the downloadable package starts and serves it,
+      # and that the Claude Desktop bridge from the .mcpb lists its tools.
+      - name: Package the app
+        run: npm run package -- ${{ matrix.rid }} --version 0.1.0-dev
+
+      - name: Package the Claude Desktop extension
+        run: npm run package:desktop -- --version 0.1.0-dev
+
+      - name: Smoke test the packages
+        run: npm run smoke:package -- dist-packages/Altrobe-0.1.0-dev-${{ matrix.rid }}.zip --desktop dist-packages/Altrobe-0.1.0-dev.mcpb
+
+  # The CDK app in infra/: unit tests and an offline synth (a placeholder account, no AWS calls).
+  infra:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: infra/package-lock.json
+
+      - name: Install infra dependencies
+        run: npm --prefix infra ci
+
+      - name: Type-check the infra
+        run: npm --prefix infra run typecheck
+
+      - name: Infra tests
+        run: npm --prefix infra test
+
+      - name: Synthesize (offline)
+        run: npm --prefix infra run synth:offline

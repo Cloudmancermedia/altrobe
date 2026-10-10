@@ -1,0 +1,35 @@
+# Extracted Blizzard content. Never commit game data, models, or textures.
+/extracted/
+/output/
+DBDCache/
+*.blp
+*.m2
+*.skin
+*.skel
+*.anim
+*.db2
+*.dbc
+*.casc
+
+# Dependencies and builds
+node_modules/
+dist/
+bin/
+obj/
+
+# Local tooling
+.claude/worktrees/
+.env
+.env.*
+.DS_Store
+
+# Playwright output (browsers install outside the repo, under the user's cache folder)
+test-results/
+playwright-report/
+blob-report/
+/package-lock.json
+# Release packages from npm run package
+dist-packages/
+
+# CDK output
+infra/cdk.out/

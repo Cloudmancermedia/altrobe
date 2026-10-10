@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Altrobe.Core/Altrobe.Core.csproj" />
+    <Project Path="src/Altrobe.Server/Altrobe.Server.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Altrobe.Core.Tests/Altrobe.Core.Tests.csproj" />
+    <Project Path="tests/Altrobe.Server.Tests/Altrobe.Server.Tests.csproj" />
+  </Folder>
+</Solution>
