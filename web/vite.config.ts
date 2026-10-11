@@ -1,7 +1,7 @@
 /// <reference types="vitest/config" />
 import react from '@vitejs/plugin-react'
 import { fileURLToPath } from 'node:url'
-import { defineConfig, type PluginOption } from 'vite'
+import { defineConfig, type PluginOption, type ProxyOptions } from 'vite'
 
 // https://vite.dev/config/
 export default defineConfig(async ({ command, mode }) => {
@@ -25,14 +25,14 @@ export default defineConfig(async ({ command, mode }) => {
   // proxy drops the header; Host stays localhost, which the server accepts.
   const api = command === 'serve' ? process.env.ALTROBE_API : undefined
   // `ws` also carries the viewer tab's command channel (/api/v1/session).
-  const toServer = api && {
+  const toServer: ProxyOptions | undefined = api ? {
     target: api,
     ws: true,
-    configure: (proxy: { on: (e: 'proxyReq' | 'proxyReqWs', f: (req: { removeHeader: (h: string) => void }) => void) => void }) => {
+    configure: proxy => {
       proxy.on('proxyReq', req => req.removeHeader('origin'))
       proxy.on('proxyReqWs', req => req.removeHeader('origin'))
     },
-  }
+  } : undefined
   return {
     plugins,
     server: toServer ? { proxy: { '/api': toServer, '/assets': toServer } } : undefined,
